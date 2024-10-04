@@ -1,0 +1,46 @@
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Exceptions
+!minmax_cols.xlsx
+!"Automatic excel calculations/Input/Uitwerk light uurbasis zonder koeler RM.xlsm"
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Folders
+Data/
+ExcelOutput/
+ImportedPickles/
+Python code harmen/
+sample data/
+Output/
+AutomaticReportMaking/Input/
+AutomaticReportMaking/Output/
+AutomaticReportMaking/TemporaryStoredFiles/
+EVHI Data Cubulus/
+saveTemporaryPickles/
+Automatic excel calculations/Input/
+Automatic excel calculations/Output/
+Automatic excel calculations/TemporaryStoredFiles/
+
+# Ignore larger files
+*.pickle
+*.dll
+*.csv
+*.xlsx
+*.ffs_db
+*.txt
+*.pdf
+*.pyc
+*.pkl
+*.bak
+*.xlsm
