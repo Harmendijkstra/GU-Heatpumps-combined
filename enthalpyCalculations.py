@@ -5,8 +5,6 @@ from os.path import join as cmb
 from createOutput import convert_excel_output, save_dataframe_with_dates
 import os
 
-excelFolder = 'ExcelOutput'
-
 def interpolate_2d(df_Ggas, temperature, pressure):
     # Find the surrounding temperatures and pressures
     temp_cols = df_Ggas.columns
@@ -144,16 +142,14 @@ def add_additional_columns(df, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q
     df_full[('RV19a', 'Q_straten', '')] = Q_straten
     return df_full
 
-def save_and_convert(df, prefix, pBase, folder_dir):
-    fpath = save_dataframe_with_dates(df, {}, folder_dir=folder_dir, prefix=prefix, header_input_type='df')
+def save_and_convert(df, prefix, weekFolder):
+    fpath = save_dataframe_with_dates(df, {}, folder_dir=weekFolder, prefix=prefix, header_input_type='df')
     change_files = [fpath]
-    convert_excel_output(pBase, change_files)
+    convert_excel_output(weekFolder, change_files)
     return fpath
 
-def add_enthalpy_calcualations(df_1hr_newheaders, sMeetsetFolder, prefix=''):
-    sEnthalpyTable = 'EnthalpyInput/EnthalpyTable.xlsx'
-    pBase = os.getcwd()
-    
+def add_enthalpy_calcualations(df_1hr_newheaders, folder_dir, year, prefix=''):
+    sEnthalpyTable = 'EnthalpyInput/EnthalpyTable.xlsx'    
     df_Ggas = load_enthalpy_table(sEnthalpyTable)
     interp_func, temperatures, pressures = create_interpolation_function(df_Ggas)
     
@@ -164,17 +160,20 @@ def add_enthalpy_calcualations(df_1hr_newheaders, sMeetsetFolder, prefix=''):
     df_full = add_additional_columns(df_1hr_newheaders_withRV, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten)
     
     weekno =  df_full.index.isocalendar().week
+    all_weeks = list(weekno.unique())
+    weeks_with_year = [year + '-' + str(no) for no in all_weeks]
     
-    for no in list(weekno.unique()):
+    
+    
+    for no in all_weeks:
         mask = weekno == no
+        this_week = df_full[mask]
         # Check whether the week is complete:
+        time_diff = this_week.index[-1] - this_week.index[0]
         skipping = False
-        if 'hour' in prefix:
-            if len(weekno[mask]) != 168:
-                skipping = True
-        elif 'min' in prefix:
-            if len(weekno[mask]) != 10080:
-                skipping = True
+        if not time_diff >= pd.Timedelta('6 days 23:00:00'):
+            skipping = True
+
         if skipping:
             print(f'Skipping week {no}, not complete week')
         else:
@@ -182,18 +181,13 @@ def add_enthalpy_calcualations(df_1hr_newheaders, sMeetsetFolder, prefix=''):
             df_1hr_newheaders_withRV_week = df_1hr_newheaders_withRV[mask]
             df_1hr_newheaders_week = df_1hr_newheaders[mask]
             df_full_week = df_full[mask]
-            weekFolder = cmb(pBase, excelFolder, sMeetsetFolder, str(no))
+            weekFolder = cmb(folder_dir, year + '-' +str(no))
             if not os.path.exists(weekFolder):
                 os.makedirs(weekFolder)
             weekPrefixRV = prefix + 'weekno - ' + str(no)
             weekPrefix = prefix.replace('RV - ', '') + 'weekno - ' + str(no)
-            save_and_convert(df_1hr_newheaders_withRV_week, weekPrefixRV, pBase, weekFolder)
-            save_and_convert(df_1hr_newheaders_week, weekPrefix, pBase, weekFolder)
+            save_and_convert(df_1hr_newheaders_withRV_week, weekPrefixRV, weekFolder)
+            save_and_convert(df_1hr_newheaders_week, weekPrefix, weekFolder)
             # fullweekPrefix = weekPrefix + 'full - '
-            # save_and_convert(df_full_week, fullweekPrefix, pBase, weekFolder)
-
-    # Below can be used to save the full dataframe with all weeks instead of per week
-    # folder_dir = cmb(pBase, excelFolder, sMeetsetFolder)
-    # save_and_convert(df_1hr_newheaders_withRV, prefix, pBase, folder_dir)
-    # fullPrefix = prefix + 'full - '
-    # save_and_convert(df_full, fullPrefix, pBase, folder_dir)
+            # save_and_convert(df_full_week, fullweekPrefix, weekFolder)
+    return weeks_with_year

@@ -52,7 +52,8 @@ def get_decimal_places_mapping(input_data, input_type='dict', is_hourly=False):
             # Skip adding to decimal_places mapping
             return
         else:
-            print(f"The key: {key} has not a specified amount of decimals, please specify it!")
+            if key not in ['Datum', 'Tijd']:
+                print(f"The key: {key} has not a specified amount of decimals, please specify it!")
             decimal_places[mv_key] = 2  # Default to 2 decimals if not specified
 
     if input_type == 'dict':
@@ -120,13 +121,17 @@ def save_dataframe_with_dates(df, lstHeaderMapping, folder_dir, prefix='', heade
             df_output[col] = df_output[col].round(decimal_places_mapping[col_name])
 
     # Save the DataFrame to an Excel file using pd.ExcelWriter
+    # If file exist, delete it
+    if os.path.exists(file_path):
+        os.remove(file_path)
+    # Save the DataFrame to an Excel file using pd.ExcelWriter
     with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
         df_output.to_excel(writer, index=True, sheet_name='Sheet1')
     print(f"DataFrame saved to {file_path}")
     return file_path
 
 #Note below is a function special made for this project
-def convert_excel_output(pBase, change_files):
+def convert_excel_output(folder_dir, change_files):
     max_retries = 5
     retry_delay = 1  # seconds
 
@@ -137,7 +142,7 @@ def convert_excel_output(pBase, change_files):
         retry_count = 0
         while retry_count < max_retries:
             try:
-                xlWb = xlm.openWorkbook(xlApp, cmb(pBase, sFile))
+                xlWb = xlm.openWorkbook(xlApp, cmb(folder_dir, sFile))
                 break
             except Exception as e:
                 retry_count += 1

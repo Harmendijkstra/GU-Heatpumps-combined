@@ -7,7 +7,6 @@
 
 # Exceptions
 !minmax_cols.xlsx
-!"Automatic excel calculations/Input/Uitwerk light uurbasis zonder koeler RM.xlsm"
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -17,10 +16,8 @@ __pycache__/
 Thumbs.db
 
 # Folders
-Data/
 ExcelOutput/
 ImportedPickles/
-Python code harmen/
 sample data/
 Output/
 AutomaticReportMaking/Input/
@@ -31,6 +28,7 @@ saveTemporaryPickles/
 Automatic excel calculations/Input/
 Automatic excel calculations/Output/
 Automatic excel calculations/TemporaryStoredFiles/
+
 
 # Ignore larger files
 *.pickle
@@ -43,4 +41,4 @@ Automatic excel calculations/TemporaryStoredFiles/
 *.pyc
 *.pkl
 *.bak
-*.xlsm
+
