@@ -34,7 +34,6 @@ Automatic excel calculations/TemporaryStoredFiles/
 *.pickle
 *.dll
 *.csv
-*.xlsx
 *.ffs_db
 *.txt
 *.pdf
