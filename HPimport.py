@@ -321,8 +321,12 @@ def load_data(sMeetset=None, sDateStart='2024-01-01', sDateEnd='2025-12-31'):
     # Loading one day before, because of 1-2 hr timedelta from UTC to local time
     tStart = datetime.strptime(sDateStart, '%Y-%m-%d').date() - timedelta(days=1)
     tEnd = datetime.strptime(sDateEnd, '%Y-%m-%d').date()
-    # Only add files for which the YYYY-mm-dd date falls within tStart to tEnd (inclusive)
-    lstPickles = [f for f in os.listdir(cmb(pPickles,sMeetset)) if (not f.endswith('partial.bz2') and
+    # Only add files for which the YYYY-mm-dd date falls within tStart to tEnd (inclusive)    pickledir = cmb(pPickles,sMeetset)
+    pickledir = cmb(pPickles,sMeetset)
+    if not os.path.exists(pickledir):
+        os.makedirs(pickledir)
+
+    lstPickles = [f for f in os.listdir(pickledir) if (not f.endswith('partial.bz2') and
                   tStart <= datetime.strptime(f.split('_')[-1][0:10], '%Y-%m-%d').date() <= tEnd) or
                   (f.endswith('partial.bz2') and 
                    tStart <= datetime.strptime(f.split('_')[-2][0:10], '%Y-%m-%d').date() <= tEnd)]
