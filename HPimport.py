@@ -27,7 +27,7 @@ from automatic_excel_proccssing import create_word_documents
 
 
 # Specify global variables
-bReadData = False
+bReadData = True
 bWriteExcel = True
 bDebugStopExecutionHere = False # This is used before to run seperate file for the stress test of the script in between
 bReadPickles = False # This is used to read the pickles from the previous run, good for debugging, but not for normal use. It will than use var_names to read the pickles
@@ -38,7 +38,7 @@ bRunPreviousWeek = False # This variable needs to be True if the script is runne
 var_names = ['df_1hr_newheaders', 'sMeetsetFolder', 'df_1min_newheaders', 'outliers_count'] # Used to save and read variables from pickles
 
 # By default, the script will use the first two arguments as the meetset folder and location
-# One can use this by running the script from the command line with the meetset folder and location as arguments. For example python HPimport.py 'Meetset1-Deventer' 'Deventer'
+# One can use this by running the script from the command line with the meetset folder and location as arguments. For example python HPimport.py "Meetset1-Deventer" "Deventer"
 if len(sys.argv) > 2:
     sMeetsetFolder = sys.argv[1]
     location = sys.argv[2]
@@ -61,7 +61,7 @@ else:
     # Below is the option to set the date range manually
     sDateStart = '2024-07-15'
     # sDateEnd = '2025-12-31' #inclusive
-    sDateEnd = '2024-07-21'
+    sDateEnd = '2025-07-21'
 
 
 # Some global constants

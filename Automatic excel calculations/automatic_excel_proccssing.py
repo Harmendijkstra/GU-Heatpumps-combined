@@ -54,11 +54,13 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, pWord, retr
         files_in_folder = get_all_files(created_excel_output_folder)
         filepath_datadir = filter_files(files_in_folder, '1hour - RV')  # Filter files to include only those that contain '1hour - RV'
         if len(filepath_datadir) == 0: # Check if the folder is empty
-            raise Exception(f"No files found in '{created_excel_output_folder}' that contain '1hour - RV'.")
+            print(f"No files found in '{created_excel_output_folder}' that contain '1hour - RV'.")
+            continue
+            
         # Append the file to the list
         filepath_datadirs.append(filepath_datadir[0])
     if len(filepath_datadirs) == 0:
-        raise Exception(f"No files found in {created_excel_output_folder} that contain '1hour - RV'.")
+        print(f"No files found in {created_excel_output_folder} that contain '1hour - RV'.")
 
     output_folder = os.path.join(pWord, 'Output', sMeetsetFolder)
     template_file = os.path.join(cwd, 'Automatic excel calculations', 'Input', 'Template document.docx')
