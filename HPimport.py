@@ -31,7 +31,7 @@ bReadData = True
 bWriteExcel = True
 bDebugStopExecutionHere = False # This is used before to run seperate file for the stress test of the script in between
 bReadPickles = False # This is used to read the pickles from the previous run, good for debugging, but not for normal use. It will than use var_names to read the pickles
-bRunPreviousWeek = False # This variable needs to be True if the script is runned automatically, to get the previous week data 
+bRunPreviousWeek = True # This variable needs to be True if the script is runned automatically, to get the previous week data 
 
 # If bReadPickles is True, the following variables will be read from the pickles
 # var_names = ['change_files', 'df_1hr_newheaders', 'sMeetsetFolder', 'df_1min_newheaders', 'outliers_count'] # Used to save and read variables from pickles
@@ -277,37 +277,41 @@ def process_datafile(sData, dfEmpty, header_df):
     
     # Process each data row
     for cnt, row in enumerate(data_rows):
-        if row.startswith('D'):
-            if row.endswith(';'):
-                row = row[:-1]
-            parts = row.split(';')
-            timestamp = parts[1]
-            data_dict = {sTimestampCol: timestamp}
-            # Skip row if there are not complete sets of 3 values on each row
-            if np.mod(len(parts)-2, 3) != 0:
-                print(f'data_row[{cnt}] skipped, because amount of data values is not a multiple of 3 [signal_no, value, status]')
-                continue
-            elif len(parts) < 5:
-                print(f'data_row[{cnt}] skipped, no valid data found')
-                continue
-            for i in range(2, len(parts), 3):
-                if i + 2 < len(parts):
-                    signal_number = int(parts[i])
-                    if parts[i + 1] in ['','T-Mobile  NL','LTE CAT M1','False']:
-                        signal_value = np.nan
-                    else:
-                        signal_value = float(parts[i + 1])
-                    status_bit = int(parts[i + 2])
-                    # nCol = lstSignalNos.index(signal_number)
-                    nCol = lstSignalNos[lstSignalNos == str(signal_number)].index[0]
-                    signal_name = header_df.iloc[1, nCol]
-                    unit = header_df.iloc[2, nCol]
-                    tag = header_df.iloc[3, nCol]
-                    # tag = header_df.iloc[3, signal_number - nSignalNoOffset]
-                    data_dict[(signal_name, unit, tag, signal_number, 'Value')] = signal_value
-                    data_dict[(signal_name, unit, tag, signal_number, 'Status')] = status_bit
-            # df = df.append(data_dict, ignore_index=True)
-            rows.append(data_dict)
+        try:
+            if row.startswith('D'):
+                if row.endswith(';'):
+                    row = row[:-1]
+                parts = row.split(';')
+                timestamp = parts[1]
+                data_dict = {sTimestampCol: timestamp}
+                # Skip row if there are not complete sets of 3 values on each row
+                if np.mod(len(parts) - 2, 3) != 0:
+                    print(f'data_row[{cnt}] skipped, because amount of data values is not a multiple of 3 [signal_no, value, status]')
+                    continue
+                elif len(parts) < 5:
+                    print(f'data_row[{cnt}] skipped, no valid data found')
+                    continue
+                for i in range(2, len(parts), 3):
+                    if i + 2 < len(parts):
+                        signal_number = int(parts[i])
+                        if parts[i + 1] in ['', 'T-Mobile  NL', 'LTE CAT M1', 'False']:
+                            signal_value = np.nan
+                        else:
+                            signal_value = float(parts[i + 1])
+                        status_bit = int(parts[i + 2])
+                        # nCol = lstSignalNos.index(signal_number)
+                        nCol = lstSignalNos[lstSignalNos == str(signal_number)].index[0]
+                        signal_name = header_df.iloc[1, nCol]
+                        unit = header_df.iloc[2, nCol]
+                        tag = header_df.iloc[3, nCol]
+                        # tag = header_df.iloc[3, signal_number - nSignalNoOffset]
+                        data_dict[(signal_name, unit, tag, signal_number, 'Value')] = signal_value
+                        data_dict[(signal_name, unit, tag, signal_number, 'Status')] = status_bit
+                # df = df.append(data_dict, ignore_index=True)
+                rows.append(data_dict)
+        except Exception as e:
+            print(f'Error processing data_row[{cnt}]: {e}')
+            continue
     
     # Create the DataFrame from the list of rows
     df = pd.DataFrame(rows)
