@@ -750,10 +750,31 @@ def copy_output_to_automaticreporting(weeks_with_year):
                 dst_file = os.path.join(dst_path, filename)
                 shutil.copy2(src_file, dst_file)
 
+def find_base_dir():
+    # Get the current working directory
+    current_dir = os.getcwd()
+    
+    # Split the path and look for 'Process Data Scripts'
+    parts = current_dir.split(os.sep)  # Split by system's path separator
+    
+    # Check if 'Process Data Scripts' exists in the path
+    if 'Process Data Scripts' in parts:
+        base_index = parts.index('Process Data Scripts')  # Find its index
+        # The directory just above 'Process Data Scripts'
+        pParentDir = os.sep.join(parts[:base_index])
+        pBase = os.sep.join(parts[:base_index + 1])
+    else:
+        # If not found, assume current directory is base
+        pBase = current_dir
+        pParentDir = os.path.dirname(pBase)
+    
+    return pBase, pParentDir
+
 if __name__ == "__main__":
     # Set environment variables
-    pBase = os.getcwd()
-    pParentDir = os.path.dirname(pBase)
+
+    # Find base and parent directories dynamically
+    pBase, pParentDir = find_base_dir()
     pInput = cmb(pParentDir,'Collected Data')
     pPickles = cmb(pBase,'ImportedPickles')
     pRaw = cmb(pParentDir,'01. Excel data overview')
