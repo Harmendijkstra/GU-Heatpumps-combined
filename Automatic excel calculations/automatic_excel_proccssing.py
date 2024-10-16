@@ -78,8 +78,15 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, pWord, retr
         finished = False
         while (attempt <= retry_count) and not finished:
             try:
-                # Copy the Excel file to the TrustedDocuments directory
-                filename_data = os.path.join(trusted_documents_dir, excel_filename)
+                # For DNV laptops, Excel macros can only be used if the Excel file is in the TrustedDocuments directory
+                # However, this directory does not exist for the 'meetlaptops' and in that case is the TrustedDocuments directory not needed
+                
+                # Therefore, check if the TrustedDocuments directory exists, if not than use a temporary directory
+                if os.path.exists(trusted_documents_dir):
+                    # Copy the Excel file to the TrustedDocuments directory
+                    filename_data = os.path.join(trusted_documents_dir, excel_filename)          
+                else:
+                    filename_data = os.path.join(cwd, 'Automatic excel calculations', 'TemporaryStoredFiles', excel_filename)
 
                 # Delete the file if it already exists
                 if os.path.exists(filename_data):
