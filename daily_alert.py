@@ -86,7 +86,7 @@ def check_nans(df, ignore_columns):
         return f"The following columns contain NaN values: {nan_columns_str}."
 
 # Function to send email
-def send_email_with_html(subject, body, email_receiver, sMeetsetFolder, this_day):
+def send_email_with_html(subject, body, email_receiver, sMeetsetFolder, previous_day):
     email_sender ="monitoringheatpump@gmail.com"
     email_password = "crhr pwiw pwky icsf"
 
@@ -96,7 +96,7 @@ def send_email_with_html(subject, body, email_receiver, sMeetsetFolder, this_day
     msg['To'] = email_receiver
 
     # html = '<html><body><p>Hi, I have the following alerts for you!</p></body></html>'
-    intro_message = f"Hello colleagues,\n\nHeatpump monitoring saw a problem in the daily data for {sMeetsetFolder} at {this_day}.\n"
+    intro_message = f"Hello colleagues,\n\nHeatpump monitoring saw a problem in the daily data for {sMeetsetFolder} at {previous_day}.\n"
     end_message = "\n\nGreetings,\nHeatpump Monitoring System"
     full_body = intro_message + body + end_message
 
@@ -117,7 +117,7 @@ def send_email_with_html(subject, body, email_receiver, sMeetsetFolder, this_day
     s.quit()
 
 
-def send_email(subject, body, email_receiver, sMeetsetFolder, this_day):
+def send_email(subject, body, email_receiver, sMeetsetFolder, previous_day):
     email_sender = "monitoringheatpump@gmail.com"
     email_password = "crhr pwiw pwky icsf"  # Replace with your app password if 2FA is enabled
 
@@ -126,7 +126,7 @@ def send_email(subject, body, email_receiver, sMeetsetFolder, this_day):
     msg['From'] = email_sender
     msg['To'] = email_receiver
 
-    intro_message = f"Hello colleagues,\n\nHeatpump monitoring saw a problem in the daily data for {sMeetsetFolder} at {this_day}.\n"
+    intro_message = f"Hello colleagues,\n\nHeatpump monitoring saw a problem in the daily data for {sMeetsetFolder} at {previous_day}.\n"
     end_message = "\n\nGreetings,\nHeatpump Monitoring System"
     full_body = intro_message + body + end_message
 
@@ -148,9 +148,9 @@ def send_email(subject, body, email_receiver, sMeetsetFolder, this_day):
     except Exception as e:
         print(f"Failed to send email: {e}")
 
-def send_teams_message(body, sMeetsetFolder, this_day):
+def send_teams_message(body, sMeetsetFolder, previous_day):
     webhook_url = "https://dnv.webhook.office.com/webhookb2/de5c61a7-826f-4f87-9c9f-93f5366aa625@adf10e2b-b6e9-41d6-be2f-c12bb566019c/IncomingWebhook/20e3dad24a824de3ac2695892b1c8fab/5fcef47d-1ed1-4d15-92b3-dc1169d4a35e/V2Yeeb2ayiGQxihAZM7LRmzLJLWroIrbt4M-0Ntz_kaEg1"
-    intro_message = f"Hello colleagues,\n\nHeatpump monitoring saw a problem in the daily data for {sMeetsetFolder} at {this_day}.\n"
+    intro_message = f"Hello colleagues,\n\nHeatpump monitoring saw a problem in the daily data for {sMeetsetFolder} at {previous_day}.\n"
     end_message = "\n\nGreetings,\nHeatpump Monitoring System"
     full_message = intro_message + body + end_message
 
@@ -276,5 +276,5 @@ if message != "None":
 
 # Send the email if there are any issues
 if body:
-    send_email(email_subject, body, "harmen.dijkstra@dnv.com", sMeetsetFolder, this_day) # This does not work as DNV is blocking SMTP protocol
-    send_teams_message(body, sMeetsetFolder, this_day)
+    send_email(email_subject, body, "harmen.dijkstra@dnv.com", sMeetsetFolder, previous_day) # This does not work as DNV is blocking SMTP protocol
+    send_teams_message(body, sMeetsetFolder, previous_day)
