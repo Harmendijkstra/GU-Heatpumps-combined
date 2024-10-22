@@ -59,7 +59,7 @@ if bRunPreviousWeek:
     sDateEnd = lastweekday.strftime('%Y-%m-%d')
 else:
     # Below is the option to set the date range manually
-    sDateStart = '2024-07-15'
+    sDateStart = '2024-09-22'
     # sDateEnd = '2025-12-31' #inclusive
     sDateEnd = '2025-07-21'
 
@@ -103,7 +103,7 @@ def read_variables(var_names, folder='saveTemporaryPickles'):
             variables[var_name] = pickle.load(f)
     return variables
 
-def process_and_save(pBase, sMeetset):
+def process_and_save(pBase, pInput, pPickles, sMeetset):
     pMeetset = cmb(pInput, sMeetset)
     output_subdir = cmb(pPickles, sMeetset)
     os.makedirs(output_subdir, exist_ok=True)
@@ -320,7 +320,7 @@ def process_datafile(sData, dfEmpty, header_df):
     return df
 
 
-def load_data(sMeetset=None, sDateStart='2024-01-01', sDateEnd='2025-12-31'):
+def load_data(pPickles, sMeetset=None, sDateStart='2024-01-01', sDateEnd='2025-12-31'):
     print(f'\nLoading stored data from {sDateStart} -1 to {sDateEnd}..')
     # Loading one day before, because of 1-2 hr timedelta from UTC to local time
     tStart = datetime.strptime(sDateStart, '%Y-%m-%d').date() - timedelta(days=1)
@@ -682,8 +682,9 @@ def add_cop_values(df_1min):
     return df_1min
 
 
-def remove_outliers(df, df_minmax, lstHeaderMapping, max_consecutive = 5):
+def remove_outliers(df, df_minmax, lstHeaderMapping, max_consecutive=5):
     outliers_count = {}
+    max_consecutive_count = {}
 
     for column in df.columns:
         if column in lstHeaderMapping:
@@ -704,6 +705,9 @@ def remove_outliers(df, df_minmax, lstHeaderMapping, max_consecutive = 5):
                 # Track the number of outliers for this column
                 outliers_count[column] = outliers.sum()
 
+                # Initialize the max_consecutive_count for this column
+                max_consecutive_count[column] = 0
+
                 # Group consecutive outliers (reset group numbers when non-outliers appear)
                 group = (outliers.diff().ne(0).cumsum()) * outliers
                 
@@ -717,6 +721,7 @@ def remove_outliers(df, df_minmax, lstHeaderMapping, max_consecutive = 5):
                     
                     if len(grp_indices) > max_consecutive:  # Set NaN if more than max_consecutive outliers
                         df.loc[grp_indices, column] = np.nan
+                        max_consecutive_count[column] += 1  # Increment the count for this column
                     else:  # Replace 1 to max_consecutive outliers with the average of surrounding values
                         first_idx = df.index.get_loc(grp_indices[0])
                         last_idx = df.index.get_loc(grp_indices[-1])
@@ -728,7 +733,7 @@ def remove_outliers(df, df_minmax, lstHeaderMapping, max_consecutive = 5):
                         fill_value = np.nanmean([before_val, after_val])
                         df.loc[grp_indices, column] = fill_value
 
-    return df, outliers_count
+    return df, outliers_count, max_consecutive_count
 
 def copy_output_to_automaticreporting(weeks_with_year):
     src_dir = os.path.join(pRV, sMeetsetFolder)
@@ -750,6 +755,31 @@ def copy_output_to_automaticreporting(weeks_with_year):
                 dst_file = os.path.join(dst_path, filename)
                 shutil.copy2(src_file, dst_file)
 
+def combine_raw_columns(df):
+    # BACKUP columns for if Weather Air Temp value is off, 
+    # then reconstruct with a separate function from 03A+03B most likely
+    weatherAirTempCols = [col for col in df.columns if col.startswith('Weather Temp Air')]
+    df.drop(weatherAirTempCols[1:], axis=1, inplace=True)
+    if 'Itron Gas volume 2' in df.columns:
+        df.drop(['Itron Gas volume 2','Itron Gas volume 3'], axis=1, inplace=True)
+
+    process_stream_1p = ['Stream1 PressureA', 'Stream1 PressureB', 'Stream1 PressureC', 'Stream1 PressureD']
+    process_stream_1t = ['Stream1 TemperatureA', 'Stream1 TemperatureB', 'Stream1 TemperatureC', 'Stream1 TemperatureD']
+    process_stream_1f = ['Stream1 FlowA', 'Stream1 FlowB', 'Stream1 FlowC', 'Stream1 FlowD']
+    process_stream_2p = ['Stream2 PressureA', 'Stream2 PressureB', 'Stream2 PressureC', 'Stream2 PressureD']
+    process_stream_2t = ['Stream2 TemperatureA', 'Stream2 TemperatureB', 'Stream2 TemperatureC', 'Stream2 TemperatureD']
+    process_stream_2f = ['Stream2 FlowA', 'Stream2 FlowB', 'Stream2 FlowC', 'Stream2 FlowD']
+    
+    print("Convert bits to values...")
+    # Apply the function to each row and create a new column with the results
+    dictBitConversionEVHI = {'Stream1 Pressure':process_stream_1p, 'Stream1 Temperature':process_stream_1t, 
+                            'Stream1 Flow':process_stream_1f, 'Stream2 Pressure':process_stream_2p, 
+                            'Stream2 Temperature':process_stream_2t,'Stream2 Flow':process_stream_2f}
+    for key,value in dictBitConversionEVHI.items():
+        if value[0] in df.columns:
+            df[key] = df.apply(lambda row: convert_bits(row, value, unpack_format='<d'), axis=1)
+            df.drop(value, axis=1, inplace=True)
+    return df
 
 
 if __name__ == "__main__":
@@ -789,35 +819,11 @@ if __name__ == "__main__":
 
         # Read data into pickles
         if bReadData:
-            process_and_save(pBase, sMeetsetFolder)
+            process_and_save(pBase, pInput, pPickles, sMeetsetFolder)
 
-        dfRaw = load_data(sMeetset=sMeetsetFolder, sDateStart = sDateStart, sDateEnd = sDateEnd)
+        dfRaw = load_data(pPickles, sMeetset=sMeetsetFolder, sDateStart = sDateStart, sDateEnd = sDateEnd)
         df, dfHeaders = flatten_data(dfRaw, bStatus=False, ignore_multi_index_differences=True)
-        # raise ValueError("Stopping here for debugging..")
-
-        # BACKUP columns for if Weather Air Temp value is off, 
-        # then reconstruct with a separate function from 03A+03B most likely
-        weatherAirTempCols = [col for col in df.columns if col.startswith('Weather Temp Air')]
-        df.drop(weatherAirTempCols[1:], axis=1, inplace=True)
-        if 'Itron Gas volume 2' in df.columns:
-            df.drop(['Itron Gas volume 2','Itron Gas volume 3'], axis=1, inplace=True)
-
-        process_stream_1p = ['Stream1 PressureA', 'Stream1 PressureB', 'Stream1 PressureC', 'Stream1 PressureD']
-        process_stream_1t = ['Stream1 TemperatureA', 'Stream1 TemperatureB', 'Stream1 TemperatureC', 'Stream1 TemperatureD']
-        process_stream_1f = ['Stream1 FlowA', 'Stream1 FlowB', 'Stream1 FlowC', 'Stream1 FlowD']
-        process_stream_2p = ['Stream2 PressureA', 'Stream2 PressureB', 'Stream2 PressureC', 'Stream2 PressureD']
-        process_stream_2t = ['Stream2 TemperatureA', 'Stream2 TemperatureB', 'Stream2 TemperatureC', 'Stream2 TemperatureD']
-        process_stream_2f = ['Stream2 FlowA', 'Stream2 FlowB', 'Stream2 FlowC', 'Stream2 FlowD']
-        
-        print("Convert bits to values...")
-        # Apply the function to each row and create a new column with the results
-        dictBitConversionEVHI = {'Stream1 Pressure':process_stream_1p, 'Stream1 Temperature':process_stream_1t, 
-                                'Stream1 Flow':process_stream_1f, 'Stream2 Pressure':process_stream_2p, 
-                                'Stream2 Temperature':process_stream_2t,'Stream2 Flow':process_stream_2f}
-        for key,value in dictBitConversionEVHI.items():
-            if value[0] in df.columns:
-                df[key] = df.apply(lambda row: convert_bits(row, value, unpack_format='<d'), axis=1)
-                df.drop(value, axis=1, inplace=True)
+        df = combine_raw_columns(df)
 
         if bDebugStopExecutionHere: 
             print('Stopping here for debugging')   
@@ -865,8 +871,9 @@ if __name__ == "__main__":
         if 'Weather Abs Air Pressure' in df.columns:
             # Convert pgasin from barg to bara, but if air pressure is below minimum_atmospheric_pressure mbar, add atmospheric_pressure to the value instead of reading the air pressure
             df['PgasIn'] = np.where(
-                df['Weather Abs Air Pressure'] < minimum_atmospheric_pressure, atmospheric_pressure + df['PgasIn'],
-                df['Weather Abs Air Pressure'].div(1000) + df['PgasIn']
+                df['Weather Abs Air Pressure'].fillna(atmospheric_pressure) < minimum_atmospheric_pressure,
+                atmospheric_pressure + df['PgasIn'],
+                df['Weather Abs Air Pressure'].fillna(atmospheric_pressure).div(1000) + df['PgasIn']
             )
         if 'Eastron01 Total Power' in df.columns and 'Eastron02 Total Power' in df.columns:
             df['Eastron Total Power'] = df[['Eastron01 Total Power', 'Eastron02 Total Power']].sum(axis=1)
@@ -928,13 +935,12 @@ if __name__ == "__main__":
         df_1min = sortColumns(df_1min, ['Adjusted Timestamp','Missing data (no Eastron02)','Missing data (no Belimo)'])
         minmax_filepath = cmb(pBase, "minmax_cols.xlsx")
         df_minmax = pd.read_excel(minmax_filepath)
-        df_1min, outliers_count = remove_outliers(df_1min, df_minmax, lstHeaderMapping=hHP.makeAllHeaderMappings())
+        df_1min, outliers_count, max_consecutive_count = remove_outliers(df_1min, df_minmax, lstHeaderMapping=hHP.makeAllHeaderMappings())
         
         # Add some columns with weighted mean flow rates
         df_1min = calc_weithed_mean_flow(df_1min, col_wm_flow='Q_ket1_wm', col_flow='Belimo01 FlowRate', col_tempout='Belimo01 Temp2 internal', col_tempin='Belimo01 Temp1 external')
         df_1min = calc_weithed_mean_flow(df_1min, col_wm_flow='Q_OV_wm', col_flow='Belimo02 FlowRate', col_tempout='Belimo02 Temp2 internal', col_tempin='Belimo02 Temp1 external')
         df_1min = calc_weithed_mean_flow(df_1min, col_wm_flow='Q_WP_wm', col_flow='Belimo03 FlowRate', col_tempout='Belimo03 Temp2 internal', col_tempin='Belimo03 Temp1 external')
-        df_1min = calc_weithed_mean_flow(df_1min, col_wm_flow='Q_klep_wm', col_flow='BelimoValve FlowRate', col_tempout='BelimoValve Temp2 internal', col_tempin='BelimoValve Temp1 external')
 
         df_1min = add_cop_values(df_1min)
 
