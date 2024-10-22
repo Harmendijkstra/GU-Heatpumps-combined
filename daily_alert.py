@@ -82,8 +82,8 @@ def check_nans(df, ignore_columns):
     if not nan_columns:
         return "None"
     else:
-        nan_columns_str = ', '.join([f"{col[0]} ({col[1]}, {col[2]})" for col in nan_columns])
-        return f"The following columns contain NaN values: {nan_columns_str}."
+        nan_columns_str = '\n'.join([' '.join(map(str, col)) for col in nan_columns])
+        return f"NaN values at:\n{nan_columns_str}"
 
 # Function to send email
 def send_email_with_html(subject, body, email_receiver, sMeetsetFolder, previous_day):
@@ -149,10 +149,9 @@ def send_email(subject, body, email_receiver, sMeetsetFolder, previous_day):
         print(f"Failed to send email: {e}")
 
 def send_teams_message(body, sMeetsetFolder, previous_day):
-    webhook_url = "https://dnv.webhook.office.com/webhookb2/de5c61a7-826f-4f87-9c9f-93f5366aa625@adf10e2b-b6e9-41d6-be2f-c12bb566019c/IncomingWebhook/20e3dad24a824de3ac2695892b1c8fab/5fcef47d-1ed1-4d15-92b3-dc1169d4a35e/V2Yeeb2ayiGQxihAZM7LRmzLJLWroIrbt4M-0Ntz_kaEg1"
-    intro_message = f"Hello colleagues,\n\nHeatpump monitoring saw a problem in the daily data for {sMeetsetFolder} at {previous_day}.\n"
-    end_message = "\n\nGreetings,\nHeatpump Monitoring System"
-    full_message = intro_message + body + end_message
+    webhook_url = "https://dnv.webhook.office.com/webhookb2/de5c61a7-826f-4f87-9c9f-93f5366aa625@adf10e2b-b6e9-41d6-be2f-c12bb566019c/IncomingWebhook/6dd787245df144fba6398bbdd59c473a/5fcef47d-1ed1-4d15-92b3-dc1169d4a35e/V2fqnkFCPWLIE4NfhKdZuU3tUpztHS4FFeH743E_yqXTY1"
+    intro_message = f"Daily data report for {sMeetsetFolder} at {previous_day}.\n"
+    full_message = intro_message + body
 
     headers = {'Content-Type': 'application/json'}
     payload = {
@@ -272,9 +271,9 @@ if max_consecutive_issues:
     body += f"Columns with consecutive outliers:\n{max_consecutive_str}\n\n"
 
 if message != "None":
-    body += f"{message}\n"
+    body += f"{message}\n\n"
 
 # Send the email if there are any issues
 if body:
-    send_email(email_subject, body, "harmen.dijkstra@dnv.com", sMeetsetFolder, previous_day) # This does not work as DNV is blocking SMTP protocol
+    # send_email(email_subject, body, "harmen.dijkstra@dnv.com", sMeetsetFolder, previous_day) # This does not work as DNV is blocking SMTP protocol
     send_teams_message(body, sMeetsetFolder, previous_day)
