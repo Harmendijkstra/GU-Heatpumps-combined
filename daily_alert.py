@@ -31,7 +31,7 @@ import requests
 import json
 
 # Specify global variables
-bRunPreviousDay = False # This variable needs to be True if the script is runned automatically, to get the previous day data 
+bRunPreviousDay = True # This variable needs to be True if the script is runned automatically, to get the previous day data 
 maximum_interpolate_nans = 20 # Number of NaNs to interpolate in a row before setting the rest to nan
 
 
