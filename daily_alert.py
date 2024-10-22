@@ -82,7 +82,7 @@ def check_nans(df, ignore_columns):
     if not nan_columns:
         return "None"
     else:
-        nan_columns_str = '\n\n'.join([' '.join(map(str, col)) for col in nan_columns])
+        nan_columns_str = '\n\n'.join([f"{col[0]}: ({', '.join(map(str, col[1:]))})" for col in nan_columns])
         return f"NaN values at:\n\n{nan_columns_str}"
 
 # Function to send email
