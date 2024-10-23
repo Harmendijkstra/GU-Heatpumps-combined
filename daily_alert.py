@@ -281,5 +281,5 @@ if message != "None":
 
 # Send the email if there are any issues
 if body:
-    #send_email(email_subject, email_body, "harmen.dijkstra@dnv.com", sMeetsetFolder, previous_day) # This does not work as DNV is blocking SMTP protocol
+    send_email(email_subject, email_body, "robert.mellema@dnv.com", sMeetsetFolder, previous_day) # With DNV, one needs to 'allow sender' within review of quarantined emails
     send_teams_message(body, sMeetsetFolder, previous_day)
