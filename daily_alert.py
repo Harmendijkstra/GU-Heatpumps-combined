@@ -83,7 +83,10 @@ def check_nans(df, ignore_columns):
         return "None"
     else:
         nan_columns_str = '\n\n'.join([f"{col[0]}: ({', '.join(map(str, col[1:]))})" for col in nan_columns])
-        return f"NaN values at:\n\n{nan_columns_str}"
+        nan_columns_email_str = '\n'.join([f"{col[0]}: ({', '.join(map(str, col[1:]))})" for col in nan_columns])
+        message = f"NaN values at:\n\n{nan_columns_str}"
+        email_message = f"NaN values at:\n{nan_columns_email_str}"
+        return message, email_message
 
 # Function to send email
 def send_email_with_html(subject, body, email_receiver, sMeetsetFolder, previous_day):
@@ -126,7 +129,7 @@ def send_email(subject, body, email_receiver, sMeetsetFolder, previous_day):
     msg['From'] = email_sender
     msg['To'] = email_receiver
 
-    intro_message = f"Hello colleagues,\n\nHeatpump monitoring saw a problem in the daily data for {sMeetsetFolder} at {previous_day}.\n"
+    intro_message = f"Hello colleagues,\n\nDaily data report for {sMeetsetFolder} at {previous_day}.\n"
     end_message = "\n\nGreetings,\nHeatpump Monitoring System"
     full_body = intro_message + body + end_message
 
@@ -259,21 +262,24 @@ df_1hr_newheaders = create_output_dataframe(df_1hr, dictHeaderMapping, is_hourly
 
 # Columns to ignore
 ignore_columns = ['V_gas_br', 'Pe_WP1', 'Pe_WP2', 'cop_wm1', 'cop_wm2'] # Columns to ignore when checking for NaN values
-message = check_nans(df_1hr_newheaders, ignore_columns)
+message, email_message = check_nans(df_1hr_newheaders, ignore_columns)
 # Check max_consecutive_count
 max_consecutive_issues = {k: v for k, v in max_consecutive_count.items() if v > 1}
 # Construct the email content
 email_subject = "Heatpump Monitoring"
 body = ""
+email_body = ""
 
 if max_consecutive_issues:
     max_consecutive_str = '\n'.join([f"{k}: {v}" for k, v in max_consecutive_issues.items()])
     body += f"Columns with consecutive outliers:\n{max_consecutive_str}\n\n"
+    email_body += f"Columns with consecutive outliers:\n{max_consecutive_str}\n\n"
 
 if message != "None":
     body += f"{message}\n\n"
+    email_body = f"{email_message}"
 
 # Send the email if there are any issues
 if body:
-    # send_email(email_subject, body, "harmen.dijkstra@dnv.com", sMeetsetFolder, previous_day) # This does not work as DNV is blocking SMTP protocol
+    #send_email(email_subject, email_body, "harmen.dijkstra@dnv.com", sMeetsetFolder, previous_day) # This does not work as DNV is blocking SMTP protocol
     send_teams_message(body, sMeetsetFolder, previous_day)
