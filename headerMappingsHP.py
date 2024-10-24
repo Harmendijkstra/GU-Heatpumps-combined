@@ -64,8 +64,8 @@ def makeAllHeaderMappings():
         'Q_OV_wm':                  {"minute_data": ['AV2','Q_OV_wm','kJ/s'], "hourly_data": ['AV2','Q_OV_wm','kWh']}, #Note that this is a dictonary to have different dimesions for minute and hourly data
         'Q_WP_wm':                  {"minute_data": ['AV3','Q_WP_wm','kJ/s'], "hourly_data": ['AV3','Q_WP_wm','kWh']},#Note that this is a dictonary to have different dimesions for minute and hourly data
         # 'Q_klep_wm_sum':                ['AV4','Q_klep_wm_sum','kJ/s'], #Note that this is a dictonary to have different dimesions for minute and hourly data
-        'cop_wm1':                      ['AV5','cop_wm1','-'],
-        'cop_wm2':                      ['AV6','cop_wm2','-'],
+        'Cop_fabr1':                      ['AV5','Cop_fabr1','-'],
+        'Cop_fabr2':                      ['AV6','Cop_fabr2','-'],
     }
     return lstHeaderMapping
 

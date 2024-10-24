@@ -22,8 +22,12 @@ import shutil
 import sys
 import fitz  # PyMuPDF
 
+
 sys.path.append('Automatic excel calculations/')
+sys.path.append('knmi/')
 from automatic_excel_proccssing import create_word_documents
+from knmi import get_hour_data_dataframe
+station_deelen = 275
 
 
 # Specify global variables
@@ -59,7 +63,7 @@ if bRunPreviousWeek:
     sDateEnd = lastweekday.strftime('%Y-%m-%d')
 else:
     # Below is the option to set the date range manually
-    sDateStart = '2024-09-22'
+    sDateStart = '2024-09-15'
     # sDateEnd = '2025-12-31' #inclusive
     sDateEnd = '2025-07-21'
 
@@ -668,16 +672,16 @@ def add_cop_values(df_1min):
     pct_wm1 = df_1min['Eastron01 Total Power'].div(max_power_wm1)
     pct_wm2 = df_1min['Eastron02 Total Power'].div(max_power_wm2)
     # Calculate the coefficient of performance (COP) for wm1
-    cop_wm1 = diff_temp * ((isi + t_omg * iss) + pct_wm1 * (ssi + t_omg * sss)) + (iii + t_omg * iss) + pct_wm1 * (ssi + t_omg * sis)
+    cop_fabr1 = diff_temp * ((isi + t_omg * iss) + pct_wm1 * (ssi + t_omg * sss)) + (iii + t_omg * iss) + pct_wm1 * (ssi + t_omg * sis)
     # Calculate the coefficient of performance (COP) for wm2
-    cop_wm2 = diff_temp * ((isi + t_omg * iss) + pct_wm2 * (ssi + t_omg * sss)) + (iii + t_omg * iss) + pct_wm2 * (ssi + t_omg * sis)
-    # Set cop_wm1 to NaN if Eastron01 Total Power is below 300 We
-    cop_wm1[df_1min['Eastron01 Total Power'] < minimum_WP_power] = np.nan
-    # Set cop_wm2 to NaN if Eastron02 Total Power is below 300 We
-    cop_wm2[df_1min['Eastron02 Total Power'] < minimum_WP_power] = np.nan
+    cop_fabr2 = diff_temp * ((isi + t_omg * iss) + pct_wm2 * (ssi + t_omg * sss)) + (iii + t_omg * iss) + pct_wm2 * (ssi + t_omg * sis)
+    # Set Cop_fabr1 to NaN if Eastron01 Total Power is below 300 We
+    cop_fabr1[df_1min['Eastron01 Total Power'] < minimum_WP_power] = np.nan
+    # Set Cop_fabr2 to NaN if Eastron02 Total Power is below 300 We
+    cop_fabr2[df_1min['Eastron02 Total Power'] < minimum_WP_power] = np.nan
     # Add the calculated COP values to the DataFrame
-    df_1min['cop_wm1'] = cop_wm1
-    df_1min['cop_wm2'] = cop_wm2
+    df_1min['Cop_fabr1'] = cop_fabr1
+    df_1min['Cop_fabr2'] = cop_fabr2
     # Return the modified DataFrame
     return df_1min
 
@@ -945,6 +949,21 @@ if __name__ == "__main__":
         df_1min = add_cop_values(df_1min)
 
         df_1hr = convert_to_1_hour_data(df_1min)
+        
+        # Fill missing weather data with KNMI data:
+        # Construct start and end time for knmi data
+        start_time = (df_1hr.index[0] - timedelta(days=1)).strftime('%Y%m%d%H')
+        end_time = (df_1hr.index[-1] + timedelta(days=1)).strftime('%Y%m%d%H')
+        df = get_hour_data_dataframe(stations=[station_deelen], start=start_time, end=end_time , variables=['T','P', 'U'])
+        # Fill NaN values with KNMI data
+        temp_air_filled = (df['T'] / 10).reindex(df_1hr.index)
+        air_pres_filled = (df['P'] / 10).reindex(df_1hr.index)
+        rel_hum_filled = (df['U']).reindex(df_1hr.index)
+        df_1hr['Weather Temp Air'] = df_1hr['Weather Temp Air'].combine_first(temp_air_filled)
+        df_1hr['Weather Abs Air Pressure'] = df_1hr['Weather Abs Air Pressure'].combine_first(air_pres_filled)
+        df_1hr['Weather Rel Humidity'] = df_1hr['Weather Rel Humidity'].combine_first(rel_hum_filled)
+
+
         
         df_1hr['Itron Gas volume 1_diff'] = df_1hr['Itron Gas volume 1_diff']*1000 # Convert first from m3/h to l/h']
 
