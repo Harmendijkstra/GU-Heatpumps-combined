@@ -58,16 +58,18 @@ else:
     sMeetsetFolder = 'Meetset1-Deventer'
     location = 'Deventer' # Used for Automatic excel calculations within Word documents
 
+#Note that we need to go back an extra day because knmi data is not available yet for the previous day and even one more since we need one or two hours of the day before due to hour settings (summertime/wintertime)
 if bRunTwoDaysBefore:
     time_now = datetime.now()
     two_days_previous_date  = time_now - timedelta(days=2) # Go back 2 days
     two_days_previous = two_days_previous_date.strftime('%Y-%m-%d')
-    previous_day_date = time_now - timedelta(days=1) # Go back 1 day
-    previous_day = previous_day_date.strftime('%Y-%m-%d')
+    three_days_previous_date = time_now - timedelta(days=3) # Go back 3 days
+    three_days_previous = three_days_previous_date.strftime('%Y-%m-%d')
 else:
     # Below is the option to set the day manually
+    three_days_previous = '2024-10-13'
     two_days_previous = '2024-10-14'
-    previous_day = '2024-10-15'
+
 
 
 
@@ -80,7 +82,7 @@ def check_nans(df, ignore_columns):
     
     # Generate the message
     if not nan_columns:
-        return "None"
+        return "None", "None"
     else:
         nan_columns_str = '\n\n'.join([f"{col[0]}: ({', '.join(map(str, col[1:]))})" for col in nan_columns])
         nan_columns_email_str = '\n'.join([f"{col[0]}: ({', '.join(map(str, col[1:]))})" for col in nan_columns])
@@ -92,12 +94,16 @@ def check_nans(df, ignore_columns):
 # Read data into pickles
 process_and_save(pBase, pInput, pPickles, sMeetsetFolder)
 
-dfRaw = load_data(pPickles, sMeetset=sMeetsetFolder, sDateStart = two_days_previous, sDateEnd = previous_day)
+dfRaw = load_data(pPickles, sMeetset=sMeetsetFolder, sDateStart = three_days_previous, sDateEnd = two_days_previous)
 df, dfHeaders = flatten_data(dfRaw, bStatus=False, ignore_multi_index_differences=True)
 df = combine_raw_columns(df)
 df = combine_and_sync_rows(df)
-df = add_hours_based_on_dst(df, two_days_previous, previous_day)
+df = add_hours_based_on_dst(df, three_days_previous, two_days_previous)
 df.set_index('Adjusted Timestamp', drop=False, inplace=True)
+# Now take only the data from the two days before, given that the index is the adjusted timestamp and timedate is in the index
+two_days_previous_datetime = pd.to_datetime(two_days_previous)
+df = df[df['Adjusted Timestamp'].dt.date == two_days_previous_datetime.date()]
+
 df = check_monotonic_and_fill_gaps(df, freq='15s')
 df = interpolate_nans(df, nLimit=maximum_interpolate_nans)
 
