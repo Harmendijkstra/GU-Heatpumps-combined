@@ -675,13 +675,30 @@ def add_cop_values(df_1min):
     cop_fabr1 = diff_temp * ((isi + t_omg * iss) + pct_wm1 * (ssi + t_omg * sss)) + (iii + t_omg * iss) + pct_wm1 * (ssi + t_omg * sis)
     # Calculate the coefficient of performance (COP) for wm2
     cop_fabr2 = diff_temp * ((isi + t_omg * iss) + pct_wm2 * (ssi + t_omg * sss)) + (iii + t_omg * iss) + pct_wm2 * (ssi + t_omg * sis)
-    # Set Cop_fabr1 to NaN if Eastron01 Total Power is below 300 We
+    # Set COP_fabr1 to NaN if Eastron01 Total Power is below 300 We
     cop_fabr1[df_1min['Eastron01 Total Power'] < minimum_WP_power] = np.nan
-    # Set Cop_fabr2 to NaN if Eastron02 Total Power is below 300 We
+    # Set COP_fabr2 to NaN if Eastron02 Total Power is below 300 We
     cop_fabr2[df_1min['Eastron02 Total Power'] < minimum_WP_power] = np.nan
     # Add the calculated COP values to the DataFrame
-    df_1min['Cop_fabr1'] = cop_fabr1
-    df_1min['Cop_fabr2'] = cop_fabr2
+    df_1min['COP_fabr1'] = cop_fabr1
+    df_1min['COP_fabr2'] = cop_fabr2
+    
+    # Calculate the total power
+    total_power = df_1min['Eastron01 Total Power'] + df_1min['Eastron02 Total Power']
+    
+    # Create a mask for valid total power (non-zero)
+    valid_power_mask = total_power != 0
+    
+    # Calculate the weighted mean of COP_fabr1 and COP_fabr2 only for valid total power
+    weighted_cop_fabr = np.where(
+        valid_power_mask,
+        (df_1min['COP_fabr1'] * df_1min['Eastron01 Total Power'] + df_1min['COP_fabr2'] * df_1min['Eastron02 Total Power']) / total_power,
+        np.nan
+    )
+    
+    # Add the weighted COP to the DataFrame
+    df_1min['COP_fabr'] = weighted_cop_fabr
+    
     # Return the modified DataFrame
     return df_1min
 
