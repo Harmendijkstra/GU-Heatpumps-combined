@@ -30,7 +30,7 @@ from knmi import get_hour_data_dataframe
 station_deelen = 275
 
 # Specify global variables
-bRunPreviousDay = True # This variable needs to be True if the script is runned automatically, to get the previous day data 
+bRunTwoDaysBefore = True # This variable needs to be True if the script is runned automatically, to get the data two days before. Note that we can not check the data from yesterday as the knmi data will not be available yet.
 maximum_interpolate_nans = 20 # Number of NaNs to interpolate in a row before setting the rest to nan
 
 
@@ -58,15 +58,16 @@ else:
     sMeetsetFolder = 'Meetset1-Deventer'
     location = 'Deventer' # Used for Automatic excel calculations within Word documents
 
-if bRunPreviousDay:
+if bRunTwoDaysBefore:
     time_now = datetime.now()
-    previousday_date  = time_now - timedelta(days=1) # Go back 1 day to the previous day
-    previous_day = previousday_date.strftime('%Y-%m-%d')
-    this_day = time_now.strftime('%Y-%m-%d')
+    two_days_previous_date  = time_now - timedelta(days=2) # Go back 2 days
+    two_days_previous = two_days_previous_date.strftime('%Y-%m-%d')
+    previous_day_date = time_now - timedelta(days=1) # Go back 1 day
+    previous_day = previous_day_date.strftime('%Y-%m-%d')
 else:
     # Below is the option to set the day manually
-    previous_day = '2024-10-14'
-    this_day = '2024-10-15'
+    two_days_previous = '2024-10-14'
+    previous_day = '2024-10-15'
 
 
 
@@ -91,11 +92,11 @@ def check_nans(df, ignore_columns):
 # Read data into pickles
 process_and_save(pBase, pInput, pPickles, sMeetsetFolder)
 
-dfRaw = load_data(pPickles, sMeetset=sMeetsetFolder, sDateStart = previous_day, sDateEnd = this_day)
+dfRaw = load_data(pPickles, sMeetset=sMeetsetFolder, sDateStart = two_days_previous, sDateEnd = previous_day)
 df, dfHeaders = flatten_data(dfRaw, bStatus=False, ignore_multi_index_differences=True)
 df = combine_raw_columns(df)
 df = combine_and_sync_rows(df)
-df = add_hours_based_on_dst(df, previous_day, this_day)
+df = add_hours_based_on_dst(df, two_days_previous, previous_day)
 df.set_index('Adjusted Timestamp', drop=False, inplace=True)
 df = check_monotonic_and_fill_gaps(df, freq='15s')
 df = interpolate_nans(df, nLimit=maximum_interpolate_nans)
@@ -175,7 +176,7 @@ dictHeaderMapping = hHP.genHeaders(df_1min.columns)
 df_1hr_newheaders = create_output_dataframe(df_1hr, dictHeaderMapping, is_hourly=True)
 
 # Columns to ignore
-ignore_columns = ['V_gas_br', 'Pe_WP1', 'Pe_WP2', 'cop_wm1', 'cop_wm2'] # Columns to ignore when checking for NaN values
+ignore_columns = ['V_gas_br', 'Pe_WP1', 'Pe_WP2', 'COP_fabr1', 'COP_fabr2', 'COP_fabr'] # Columns to ignore when checking for NaN values
 message, email_message = check_nans(df_1hr_newheaders, ignore_columns)
 # Check max_consecutive_count
 max_consecutive_issues = {k: v for k, v in max_consecutive_count.items() if v > 1}
@@ -195,5 +196,5 @@ if message != "None":
 
 # Send the email if there are any issues
 if body:
-    send_email(email_subject, email_body, "robert.mellema@dnv.com", sMeetsetFolder, previous_day) # With DNV, one needs to 'allow sender' within review of quarantined emails
-    send_teams_message(body, sMeetsetFolder, previous_day)
+    send_email(email_subject, email_body, "robert.mellema@dnv.com", sMeetsetFolder, two_days_previous) # With DNV, one needs to 'allow sender' within review of quarantined emails
+    send_teams_message(body, sMeetsetFolder, two_days_previous)
