@@ -57,8 +57,8 @@ else:
 if bRunPreviousWeek:
     time_now = datetime.now()
     weekno = time_now.isocalendar()[1]
-    firstweekday = time_now - timedelta(days=time_now.weekday() + 7) # Go back 7 days to the previous week, starting from the Monday
-    lastweekday = firstweekday + timedelta(days=6) # Go forward 6 days to the Sunday
+    firstweekday = time_now - timedelta(days=time_now.weekday() + 8) # Go back 8 days to the previous week
+    lastweekday = firstweekday + timedelta(days=7) # Go forward 7 days to the Sunday
     sDateStart = firstweekday.strftime('%Y-%m-%d')
     sDateEnd = lastweekday.strftime('%Y-%m-%d')
 else:
@@ -327,7 +327,7 @@ def process_datafile(sData, dfEmpty, header_df):
 def load_data(pPickles, sMeetset=None, sDateStart='2024-01-01', sDateEnd='2025-12-31'):
     print(f'\nLoading stored data from {sDateStart} -1 to {sDateEnd}..')
     # Loading one day before, because of 1-2 hr timedelta from UTC to local time
-    tStart = datetime.strptime(sDateStart, '%Y-%m-%d').date() - timedelta(days=1)
+    tStart = datetime.strptime(sDateStart, '%Y-%m-%d').date()
     tEnd = datetime.strptime(sDateEnd, '%Y-%m-%d').date()
     # Only add files for which the YYYY-mm-dd date falls within tStart to tEnd (inclusive)    pickledir = cmb(pPickles,sMeetset)
     pickledir = cmb(pPickles,sMeetset)
