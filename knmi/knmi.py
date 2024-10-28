@@ -19,7 +19,6 @@ def _get_parameters(
         *,
         include_hour=False,
 ) -> Dict:
-
     if start is None or end is None:
         raise TypeError("'start' and 'end' parameters are required")
 
@@ -29,12 +28,22 @@ def _get_parameters(
     else:
         params["stns"] = ":".join(str(station) for station in stations)
 
+    # Convert start to string with necessary format
     if not isinstance(start, str):
         start = start.strftime("%Y%m%d%H") if include_hour else start.strftime("%Y%m%d")
+    
+    # Ensure start ends with '00'
+    if start[-2:] != '00':
+        start = start[:-2] + '00'
     params["start"] = start
 
+    # Convert end to string with necessary format
     if not isinstance(end, str):
         end = end.strftime("%Y%m%d%H") if include_hour else end.strftime("%Y%m%d")
+    
+    # Ensure end ends with '23'
+    if end[-2:] != '23':
+        end = end[:-2] + '23'
     params["end"] = end
 
     if inseason is True:

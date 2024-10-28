@@ -412,40 +412,82 @@ def combine_and_sync_rows(df):
 
 def add_hours_based_on_dst(df, sDateStart, sDateEnd):
     """
-    Add 1 hour or 2 hours to the 'Timestamp' column depending on whether it is Dutch summer time or winter time.
+    Adjust the 'Timestamp' column by adding 1 or 2 hours depending on whether 
+    it falls in Dutch summer time (DST) or winter time, while keeping timestamps naive.
+    The original 'Timestamp' column is retained in the output DataFrame.
     """
-    print("Add Adjusted Timestamp...")
+    print("Adding Adjusted Timestamp...")
+
     # Define the Europe/Amsterdam timezone
     amsterdam_tz = pytz.timezone('Europe/Amsterdam')
     
     def adjust_time(timestamp):
-        # Localize the timestamp to Europe/Amsterdam timezone
-        localized_timestamp = amsterdam_tz.localize(timestamp)
+        # First, make the timestamp aware in UTC to correctly manage DST changes
+        utc_timestamp = timestamp.replace(tzinfo=pytz.UTC)
         
-        # Check if the timestamp is in DST
-        if localized_timestamp.dst() != timedelta(0):
+        # Convert to Amsterdam time
+        amsterdam_time = utc_timestamp.astimezone(amsterdam_tz)
+        
+        # Check if it is in DST and adjust accordingly (keeping the result naive)
+        if amsterdam_time.dst() != timedelta(0):
             # Summer time (DST)
             return timestamp + timedelta(hours=2)
         else:
             # Winter time (Standard Time)
             return timestamp + timedelta(hours=1)
     
-    # Rename the original 'Timestamp' column
-    df = df.rename(columns={'Timestamp': 'Original Timestamp'})
+    # Create a copy of the DataFrame to avoid the SettingWithCopyWarning
+    df_copy = df.copy()
     
-    # Apply the adjust_time function to the 'Original Timestamp' column
-    df['Adjusted Timestamp'] = df['Original Timestamp'].apply(adjust_time)
+    # Keep the 'Original Timestamp' column as is, and create 'Adjusted Timestamp' column
+    df_copy['Adjusted Timestamp'] = df_copy['Timestamp'].apply(adjust_time)
     
-    # Drop the 'Original Timestamp' column
-    df = df.drop(columns=['Original Timestamp'])
-    
-    # With the adjusted timestamp, remove the leading/trailing data that falls outside of the date window
+    # Filter the DataFrame based on the date window using .loc
     tStart = datetime.strptime(sDateStart, '%Y-%m-%d')
     tEnd = datetime.strptime(sDateEnd, '%Y-%m-%d') + timedelta(days=1)
-    rowsDateWindow = df['Adjusted Timestamp'].between(tStart,tEnd)
-    df = df.loc[df[rowsDateWindow].index[:-1], :]
     
-    return df
+    # Use .loc to filter and avoid warnings
+    df_copy = df_copy.loc[(df_copy['Adjusted Timestamp'] >= tStart) & 
+                          (df_copy['Adjusted Timestamp'] < tEnd)]
+    
+    return df_copy
+
+# def add_hours_based_on_dst(df, sDateStart, sDateEnd):
+#     """
+#     Add 1 hour or 2 hours to the 'Timestamp' column depending on whether it is Dutch summer time or winter time.
+#     """
+#     print("Add Adjusted Timestamp...")
+#     # Define the Europe/Amsterdam timezone
+#     amsterdam_tz = pytz.timezone('Europe/Amsterdam')
+    
+#     def adjust_time(timestamp):
+#         # Localize the timestamp to Europe/Amsterdam timezone
+#         localized_timestamp = amsterdam_tz.localize(timestamp)
+        
+#         # Check if the timestamp is in DST
+#         if localized_timestamp.dst() != timedelta(0):
+#             # Summer time (DST)
+#             return timestamp + timedelta(hours=2)
+#         else:
+#             # Winter time (Standard Time)
+#             return timestamp + timedelta(hours=1)
+    
+#     # Rename the original 'Timestamp' column
+#     df = df.rename(columns={'Timestamp': 'Original Timestamp'})
+    
+#     # Apply the adjust_time function to the 'Original Timestamp' column
+#     df['Adjusted Timestamp'] = df['Original Timestamp'].apply(adjust_time)
+    
+#     # Drop the 'Original Timestamp' column
+#     df = df.drop(columns=['Original Timestamp'])
+    
+#     # With the adjusted timestamp, remove the leading/trailing data that falls outside of the date window
+#     tStart = datetime.strptime(sDateStart, '%Y-%m-%d')
+#     tEnd = datetime.strptime(sDateEnd, '%Y-%m-%d') + timedelta(days=1)
+#     rowsDateWindow = df['Adjusted Timestamp'].between(tStart,tEnd)
+#     df = df.loc[df[rowsDateWindow].index[:-1], :]
+    
+#     return df
 
 def make_totalizers_monotonic(df, columns):
     print('\nChecking df for monotonic increasing counters..')
@@ -615,20 +657,49 @@ def interpolate(series, thresh=20):
     mask = nans.groupby([(~nans).cumsum(),nans]).transform('size') > thresh
     return series.interpolate(method='linear', limit_area='inside').mask(mask)
 
-def check_monotonic_and_fill_gaps(df, freq='15s'):
-    index = df.index
+def check_monotonic_and_fill_gaps(df, freq='15s', tolerance_hours=2):
+    # Define the Amsterdam timezone for DST checks
+    amsterdam_tz = pytz.timezone('Europe/Amsterdam')
+
+    # Get the date where the summer time (DST) starts this year
+    year = datetime.now().year
+    summer_start_date = datetime(year, 3, 31)
+    while summer_start_date.weekday() != 6:  # 6 is Sunday
+        summer_start_date -= timedelta(days=1)
     
-    # Check if the index is monotonic increasing
-    if not index.is_monotonic_increasing:
-        raise Exception("The DatetimeIndex is not monotonic increasing.")
-    
+    # Get the date where the winter time starts this year
+    year = datetime.now().year
+    winter_start_date = datetime(year, 10, 31)
+    while winter_start_date.weekday() != 6:  # 6 is Sunday
+        winter_start_date -= timedelta(days=1)
+
+    # Remove duplicates from the DataFrame index on the winter_start_date
+    duplicate_index = df.index[(df.index.date == winter_start_date.date()) & (df.index.hour == 2) & df.index.duplicated()]
+    if len(duplicate_index) > 0:
+        df = df.drop(duplicate_index)
+
+    # Check if the DataFrame index is monotonic increasing
+    if not df.index.is_monotonic_increasing:
+        non_monotonic_index = (df.index[1:] - df.index[:-1]) < pd.Timedelta(0)
+        non_monotonic_index = np.insert(non_monotonic_index, 0, False)
+        non_monotonic_datetimes = df.index[non_monotonic_index]
+        for non_monotonic_datetime in non_monotonic_datetimes:
+            # Check if non-monotonicity occurs on the exact hour of the time change
+            if non_monotonic_datetime.date() in [summer_start_date.date(), winter_start_date.date()] and non_monotonic_datetime.hour == 2:
+                pass
+            else:
+                raise ValueError("Index is not monotonic increasing and not due to change of summer/winter time.")
+
     # Generate the expected range based on the start and end, with the given frequency
-    expected_range = pd.date_range(start=index.min(), end=index.max(), freq=freq)
-    
+    expected_range = pd.date_range(start=df.index.min(), end=df.index.max(), freq=freq)
+
+    # Remove duplicates from the expected range
+    expected_range = expected_range[~expected_range.duplicated()]
+
     # Reindex the DataFrame to the expected range, filling gaps with NaNs
-    df_reindexed = df.reindex(expected_range)
-    
-    return df_reindexed
+    df = df.reindex(expected_range)
+
+    return df
 
 def interpolate_nans(df, nLimit=None):
     print('\nInterpolating missing values in df. Current fraction of missing values:')
