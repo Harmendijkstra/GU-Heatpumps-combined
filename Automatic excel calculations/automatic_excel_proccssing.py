@@ -38,7 +38,7 @@ def findReplace(wApp, wDoc, find_str, replace_str='none'):
         wCont.Find.Execute(find_str, False, False, False, False, False, True, wdFindContinue, False, replace_str, wdReplaceAll)
 
 
-def create_word_documents(sMeetsetFolder, location, weeks_with_year, pWord, retry_count=1):
+def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_used, pWord, retry_count=1):
     # filepath_datadir = cwd + '/ExcelCalculations/Regulier/Uurwaarden/1hour - RV - weekno - 36Energy Balance - 02-09-2024 - 08-09-2024.xlsx'
     excel_filename = 'Uitwerk light uurbasis zonder koeler RM.xlsm'
     excel_filepath = os.path.abspath(os.path.join(cwd, 'Automatic excel calculations', 'Input', excel_filename))
@@ -139,6 +139,11 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, pWord, retr
 
                 # Insert the week number into the Word document
                 findReplace(wApp, wDoc, '{WEEK_NUMBER}', weekNo)
+                
+                if knmi_data_used:
+                    findReplace(wApp, wDoc, '{NOTE_KNMI}', 'Note that due to missing weather data, KNMI data was used.')
+                else:
+                    findReplace(wApp, wDoc, '{NOTE_KNMI}', '')
 
                 # Insert the Stat sheet at the location marked by '{STAT_SHEET}'
                 findReplace(wApp, wDoc, '{STAT_SHEET}')

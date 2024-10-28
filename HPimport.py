@@ -658,6 +658,26 @@ def interpolate(series, thresh=20):
     return series.interpolate(method='linear', limit_area='inside').mask(mask)
 
 def check_monotonic_and_fill_gaps(df, freq='15s', tolerance_hours=2):
+    def remove_duplicated_winter_time(df, winter_start_date):
+        # Create a mask for the overlapping hour (02:00 to 02:59) on the winter start date
+        overlap_hour_mask = (df.index.date == winter_start_date.date()) & (df.index.hour == 2)
+        
+        # Get all indices within the overlapping hour
+        overlapping_indices = df.index[overlap_hour_mask]
+        
+        # Create a boolean mask for unique indices only
+        unique_indices_mask = ~overlapping_indices.duplicated(keep='first')
+        
+        # Create a DataFrame that includes only the unique overlapping entries
+        df_unique = df[overlap_hour_mask][unique_indices_mask]
+
+        # Include non-overlapping data in the resulting DataFrame
+        df_result = pd.concat([df[~overlap_hour_mask], df_unique])
+
+        # Sort the resulting DataFrame by index
+        df_result = df_result.sort_index()
+        return df_result
+    
     # Define the Amsterdam timezone for DST checks
     amsterdam_tz = pytz.timezone('Europe/Amsterdam')
 
@@ -674,9 +694,7 @@ def check_monotonic_and_fill_gaps(df, freq='15s', tolerance_hours=2):
         winter_start_date -= timedelta(days=1)
 
     # Remove duplicates from the DataFrame index on the winter_start_date
-    duplicate_index = df.index[(df.index.date == winter_start_date.date()) & (df.index.hour == 2) & df.index.duplicated()]
-    if len(duplicate_index) > 0:
-        df = df.drop(duplicate_index)
+    df = remove_duplicated_winter_time(df, winter_start_date)
 
     # Check if the DataFrame index is monotonic increasing
     if not df.index.is_monotonic_increasing:
@@ -730,49 +748,87 @@ def sortColumns(df, lstStartCols):
     df = df[lstNewOrder]
     return df
 
-def add_cop_values(df_1min):
+def add_cop_values(df, rows_to_process=None):
+    """
+    Calculate the COP values for the specified rows in the DataFrame.
+    If no rows are specified, calculate the COP values for all rows.
+    """
     # Create a copy of the input DataFrame to avoid modifying the original data
-    df_1min = df_1min.copy()
+    df = df.copy()
+    
+    # If rows_to_process is not specified, process all rows
+    if rows_to_process is None:
+        rows_to_process = df.index
+    
     # Extract the outdoor air temperature from the DataFrame
-    t_omg = df_1min['Weather Temp Air']
+    t_omg = df.loc[rows_to_process, 'Weather Temp Air']
     # Extract the internal temperature from the DataFrame
-    t_wm = df_1min['Belimo03 Temp2 internal']
+    t_wm = df.loc[rows_to_process, 'Belimo03 Temp2 internal']
     # Calculate the temperature difference between internal and outdoor air
     diff_temp = t_wm - t_omg
     # Calculate the percentage of total power for Eastron01 and Eastron02
-    pct_wm1 = df_1min['Eastron01 Total Power'].div(max_power_wm1)
-    pct_wm2 = df_1min['Eastron02 Total Power'].div(max_power_wm2)
+    pct_wm1 = df.loc[rows_to_process, 'Eastron01 Total Power'].div(max_power_wm1)
+    pct_wm2 = df.loc[rows_to_process, 'Eastron02 Total Power'].div(max_power_wm2)
     # Calculate the coefficient of performance (COP) for wm1
     cop_fabr1 = diff_temp * ((isi + t_omg * iss) + pct_wm1 * (ssi + t_omg * sss)) + (iii + t_omg * iss) + pct_wm1 * (ssi + t_omg * sis)
     # Calculate the coefficient of performance (COP) for wm2
     cop_fabr2 = diff_temp * ((isi + t_omg * iss) + pct_wm2 * (ssi + t_omg * sss)) + (iii + t_omg * iss) + pct_wm2 * (ssi + t_omg * sis)
     # Set COP_fabr1 to NaN if Eastron01 Total Power is below 300 We
-    cop_fabr1[df_1min['Eastron01 Total Power'] < minimum_WP_power] = np.nan
+    cop_fabr1[df.loc[rows_to_process, 'Eastron01 Total Power'] < minimum_WP_power] = np.nan
     # Set COP_fabr2 to NaN if Eastron02 Total Power is below 300 We
-    cop_fabr2[df_1min['Eastron02 Total Power'] < minimum_WP_power] = np.nan
+    cop_fabr2[df.loc[rows_to_process, 'Eastron02 Total Power'] < minimum_WP_power] = np.nan
     # Add the calculated COP values to the DataFrame
-    df_1min['COP_fabr1'] = cop_fabr1
-    df_1min['COP_fabr2'] = cop_fabr2
+    df.loc[rows_to_process, 'COP_fabr1'] = cop_fabr1
+    df.loc[rows_to_process, 'COP_fabr2'] = cop_fabr2
     
     # Calculate the total power
-    total_power = df_1min['Eastron01 Total Power'] + df_1min['Eastron02 Total Power']
+    total_power = df.loc[rows_to_process, 'Eastron01 Total Power'] + df.loc[rows_to_process, 'Eastron02 Total Power']
     
     # Create a mask for valid total power (non-zero)
     valid_power_mask = total_power != 0
     
     # Calculate the weighted mean of COP_fabr1 and COP_fabr2 only for valid total power
+    cop_fabr1_filled = np.nan_to_num(df.loc[rows_to_process, 'COP_fabr1'])
+    cop_fabr2_filled = np.nan_to_num(df.loc[rows_to_process, 'COP_fabr2'])
+    total_power_filled = np.nan_to_num(df.loc[rows_to_process, 'Eastron01 Total Power']) + np.nan_to_num(df.loc[rows_to_process, 'Eastron02 Total Power'])
+    
     weighted_cop_fabr = np.where(
         valid_power_mask,
-        (df_1min['COP_fabr1'] * df_1min['Eastron01 Total Power'] + df_1min['COP_fabr2'] * df_1min['Eastron02 Total Power']) / total_power,
+        (cop_fabr1_filled * np.nan_to_num(df.loc[rows_to_process, 'Eastron01 Total Power']) + cop_fabr2_filled * np.nan_to_num(df.loc[rows_to_process, 'Eastron02 Total Power'])) / total_power_filled,
         np.nan
     )
     
+    # Ensure the relevant columns are numeric
+    df['COP_fabr1'] = pd.to_numeric(df['COP_fabr1'], errors='coerce')
+    df['COP_fabr2'] = pd.to_numeric(df['COP_fabr2'], errors='coerce')
+    df['Eastron01 Total Power'] = pd.to_numeric(df['Eastron01 Total Power'], errors='coerce')
+    df['Eastron02 Total Power'] = pd.to_numeric(df['Eastron02 Total Power'], errors='coerce')
+    
+    
+    # Handle cases where one of the COP values is NaN
+    weighted_cop_fabr = np.where(
+        np.isnan(df.loc[rows_to_process, 'COP_fabr1']) & ~np.isnan(df.loc[rows_to_process, 'COP_fabr2']),
+        df.loc[rows_to_process, 'COP_fabr2'],
+        weighted_cop_fabr
+    )
+    weighted_cop_fabr = np.where(
+        ~np.isnan(df.loc[rows_to_process, 'COP_fabr1']) & np.isnan(df.loc[rows_to_process, 'COP_fabr2']),
+        df.loc[rows_to_process, 'COP_fabr1'],
+        weighted_cop_fabr
+    )
+    
+    # Ensure COP_fabr is NaN if both COP_fabr1 and COP_fabr2 are NaN
+    weighted_cop_fabr = np.where(
+        np.isnan(df.loc[rows_to_process, 'COP_fabr1']) & np.isnan(df.loc[rows_to_process, 'COP_fabr2']),
+        np.nan,
+        weighted_cop_fabr
+    )
+    
     # Add the weighted COP to the DataFrame
-    df_1min['COP_fabr'] = weighted_cop_fabr
+    df.loc[rows_to_process, 'COP_fabr'] = weighted_cop_fabr
     
     # Return the modified DataFrame
-    return df_1min
-
+    return df
 
 def remove_outliers(df, df_minmax, lstHeaderMapping, max_consecutive=5):
     outliers_count = {}
@@ -1040,6 +1096,10 @@ if __name__ == "__main__":
         
         # Fill missing weather data with KNMI data:
         # Construct start and end time for knmi data
+        # Record whether we use knmi data by comparing number of NaN values before and after filling
+        # Sum of NaN values before filling in weather data
+        number_of_nan_values_before = df_1hr['Weather Temp Air'].isna().sum() + df_1hr['Weather Abs Air Pressure'].isna().sum() + df_1hr['Weather Rel Humidity'].isna().sum()
+        knmi_data_used = False
         start_time = (df_1hr.index[0] - timedelta(days=1)).strftime('%Y%m%d%H')
         end_time = (df_1hr.index[-1] + timedelta(days=1)).strftime('%Y%m%d%H')
         df = get_hour_data_dataframe(stations=[station_deelen], start=start_time, end=end_time , variables=['T','P', 'U'])
@@ -1050,11 +1110,18 @@ if __name__ == "__main__":
         df_1hr['Weather Temp Air'] = df_1hr['Weather Temp Air'].combine_first(temp_air_filled)
         df_1hr['Weather Abs Air Pressure'] = df_1hr['Weather Abs Air Pressure'].combine_first(air_pres_filled)
         df_1hr['Weather Rel Humidity'] = df_1hr['Weather Rel Humidity'].combine_first(rel_hum_filled)
-
-
+        number_of_nan_values_after = df_1hr['Weather Temp Air'].isna().sum() + df_1hr['Weather Abs Air Pressure'].isna().sum() + df_1hr['Weather Rel Humidity'].isna().sum()
+        filled_knmi_data = number_of_nan_values_before - number_of_nan_values_after
+        if filled_knmi_data > 0:
+            print(f"Filled {filled_knmi_data} NaN values with KNMI data.")
+            knmi_data_used = True
         
         df_1hr['Itron Gas volume 1_diff'] = df_1hr['Itron Gas volume 1_diff']*1000 # Convert first from m3/h to l/h']
-
+        
+        # Check whether we need to reprocess the COP values after we have filled in the KNMI data
+        nan_rows = df_1hr[df_1hr['COP_fabr'].isna()].index
+        if len(nan_rows) > 0:
+            df_1hr = add_cop_values(df_1hr, rows_to_process=nan_rows)
 
         if bDebugStopExecutionHere:
             df_1min.to_excel(cmb(pRV, '1min_' + sMeetsetFolder + datetime.now().strftime('_%Y-%m-%d_%Hh%M.xlsx')))
@@ -1088,7 +1155,7 @@ if __name__ == "__main__":
             prefix = '1min - RV - '
             weeks_with_year = add_enthalpy_calcualations(df_1min_newheaders, pRVMeetFolder, year, prefix=prefix)
             copy_output_to_automaticreporting(weeks_with_year)
-            create_word_documents(sMeetsetFolder, location, weeks_with_year, pWord)
+            create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_used, pWord)
             
             
             

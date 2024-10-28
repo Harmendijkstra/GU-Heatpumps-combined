@@ -66,7 +66,7 @@ def makeAllHeaderMappings():
         # 'Q_klep_wm_sum':                ['AV4','Q_klep_wm_sum','kJ/s'], #Note that this is a dictonary to have different dimesions for minute and hourly data
         'COP_fabr1':                      ['AV5','COP_fabr1','-'],
         'COP_fabr2':                      ['AV6','COP_fabr2','-'],
-        #'COP_fabr':                      ['AV7','COP_fabr','-'], note that if this is added than excel and word needs to be changed to use thre correct column
+        #'COP_fabr':                      ['AV7','COP_fabr','-'],
     }
     return lstHeaderMapping
 
