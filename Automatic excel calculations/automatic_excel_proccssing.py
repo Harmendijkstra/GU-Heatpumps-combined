@@ -6,9 +6,6 @@ import fitz  # PyMuPDF
 import time
 from datetime import datetime
 
-# NOTE THIS SCRIPT CAN NOT BE RUNNED FROM ONEDRIVE FOLDER AND IF THE SCRIPT IS RUNNED AUTOMATICALLY, THE FOLLOWING SHOULD BE ADDED:
-# 1. ADD THE DATA INPUT AUTOMATICALLY WHEN IMPORT SCRIPT IS RUNNED
-# 2. CHANGE sMEETSEFOLDER AND LOCATION TO BE DYNAMICALLY CHANGED
 
 # Get the current working directory
 cwd = os.getcwd()
@@ -104,11 +101,11 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
                 xlApp.Visible = True
                 wb.Application.Run('Start.plaatspad')
                 wb.Application.Run('Datain.data_in', filepath_datadir, excel_filename)  # Pass the file path as an argument
-                xlApp.Visible = True
-                wb.Application.ScreenUpdating = True
 
-                # Wait for 2 seconds to observe the changes
-                time.sleep(2)
+                # Wait for 10 seconds to observe the changes
+                time.sleep(10)
+                wb.Application.ScreenUpdating = True
+                xlApp.Visible = True
 
                 # Run the second macro
                 print("Running Grafieken.pasgrafiekenaan")

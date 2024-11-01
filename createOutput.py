@@ -126,7 +126,7 @@ def save_dataframe_with_dates(df, lstHeaderMapping, folder_dir, prefix='', heade
         os.remove(file_path)
     # Save the DataFrame to an Excel file using pd.ExcelWriter
     with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
-        df_output.to_excel(writer, index=True, sheet_name='Sheet1')
+        df_output.to_excel(writer, index=True, index_label=None, sheet_name='Sheet1')
     print(f"DataFrame saved to {file_path}")
     return file_path
 

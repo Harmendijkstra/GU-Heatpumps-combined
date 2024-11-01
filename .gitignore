@@ -1,5 +1,6 @@
 # IDE - VSCode
 .vscode/*
+.vs/
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
