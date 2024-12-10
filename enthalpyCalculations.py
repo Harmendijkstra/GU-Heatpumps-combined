@@ -115,20 +115,18 @@ def perform_calculations(df_Ggas, df, interp_func, temperatures, pressures):
     # dT_koeler = df[('MV38', 'Tw_klep_uit', '\u00b0C')].sub(df[('MV37', 'Tw_klep_in', '\u00b0C')])
     # df[('RV15', 'Q_koeler', 'kJ/s')] = (df[('MV36', 'Vw_klep', 'l/h')] * 4.19 * (dT_koeler)) / 3600
     dT_koeler = 0  # We no longer use this, but this is still here such that the same code can be used if above is no longer commented
-    
-    df[('RV16', 'Rend_ket', '%')] = (df[('RV11', 'Q_ket1', 'kJ/s')].div(df[('RV10', 'Q_brgas', 'kJ/s')])) *100
+    df[('RV16', 'Rend_ket', '%')] = (df[('RV11', 'Q_ket1', 'kJ/s')]).div(df[('RV10', 'Q_brgas', 'kJ/s')].where(df[('RV10', 'Q_brgas', 'kJ/s')] != 0, np.nan)) * 100
     
     Pe_WP_kW = df[('MV16', 'Pe_WP', 'W')]/1000
-    df[('RV17', 'Rend_WP', '%')] = (df[('RV14', 'Q_WP', 'kJ/s')].div(Pe_WP_kW)) * 100
+    df[('RV17', 'Rend_WP', '%')] = df[('RV14', 'Q_WP', 'kJ/s')].div(Pe_WP_kW.where(Pe_WP_kW != 0, np.nan)) * 100
     
     Q_afgeg = df[('RV11', 'Q_ket1', 'kJ/s')].add(df[('RV14', 'Q_WP', 'kJ/s')])
     Q_opgen = df[('RV10', 'Q_brgas', 'kJ/s')].add(Pe_WP_kW)
-    df[('RV18', 'Rend_waterz', '%')] = (Q_afgeg).div(Q_opgen) * 100
+    df[('RV18', 'Rend_waterz', '%')] = Q_afgeg.div(Q_opgen.where(Q_opgen != 0, np.nan)) * 100
     
     # Q_straten = df[('RV5', 'Q_str1', 'kJ/s')].add(df[('RV9', 'Q_str2', 'kJ/s')]).add(df[('RV15', 'Q_koeler', 'kJ/s')])
     Q_straten = df[('RV5', 'Q_str1', 'kJ/s')].add(df[('RV9', 'Q_str2', 'kJ/s')])
-    df[('RV19', 'Rend_tot', '%')] = Q_straten.div(Q_opgen) * 100
-    
+    df[('RV19', 'Rend_tot', '%')] = Q_straten.div(Q_opgen.where(Q_opgen != 0, np.nan)) * 100
     return df, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten
 
 def add_additional_columns(df, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten):

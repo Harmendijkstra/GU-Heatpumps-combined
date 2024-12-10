@@ -65,9 +65,9 @@ if bRunPreviousWeek:
     sDateEnd = lastweekday.strftime('%Y-%m-%d')
 else:
     # Below is the option to set the date range manually
-    sDateStart = '2024-09-15'
+    sDateStart = '2024-10-17'
     # sDateEnd = '2025-12-31' #inclusive
-    sDateEnd = '2025-07-21'
+    sDateEnd = '2025-10-25'
 
 
 # Some global constants
@@ -736,7 +736,7 @@ def interpolate_nans(df, nLimit=None):
     print(dfMissing)
     df = df.apply(interpolate, thresh=nLimit)
     # And deal with the first rows as well:
-    df.iloc[:, 3:] = df.iloc[:, 3:].bfill(axis=0)
+    df.iloc[:nLimit, 3:] = df.iloc[:nLimit, 3:].bfill(axis=0)
     return df, dfMissing
 
 def calc_weithed_mean_flow(df_1min, col_wm_flow, col_flow, col_tempout, col_tempin):
@@ -776,8 +776,13 @@ def add_cop_values(df, rows_to_process=None):
     # Calculate the temperature difference between internal and outdoor air
     diff_temp = t_wm - t_omg
     # Calculate the percentage of total power for Eastron01 and Eastron02
-    pct_wm1 = df.loc[rows_to_process, 'Eastron01 Total Power'].div(max_power_wm1)
-    pct_wm2 = df.loc[rows_to_process, 'Eastron02 Total Power'].div(max_power_wm2)
+    pe_wp1 = df['Eastron01 Total Power']
+    pe_wp2 = df['Eastron02 Total Power']
+    t_wp_uit = df['Belimo03 Temp2 internal']
+    pct_wm1 = pe_wp1/(16000*(0.0053*t_wp_uit**2 + 0.1207*t_wp_uit + 11.914)/35.6)
+    pct_wm2 = pe_wp2/(23000*(0.0053*t_wp_uit**2 + 0.1207*t_wp_uit + 11.914)/35.6)
+    # pct_wm1 = df.loc[rows_to_process, 'Eastron01 Total Power'].div(max_power_wm1) no longer applicable
+    # pct_wm2 = df.loc[rows_to_process, 'Eastron02 Total Power'].div(max_power_wm2) no longer applicable
     # Calculate the coefficient of performance (COP) for wm1
     cop_fabr1 = diff_temp * ((isi + t_omg * iss) + pct_wm1 * (ssi + t_omg * sss)) + (iii + t_omg * iis) + pct_wm1 * (sii + t_omg * sis)
     # Calculate the coefficient of performance (COP) for wm2
