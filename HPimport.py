@@ -779,9 +779,9 @@ def add_cop_values(df, rows_to_process=None):
     pct_wm1 = df.loc[rows_to_process, 'Eastron01 Total Power'].div(max_power_wm1)
     pct_wm2 = df.loc[rows_to_process, 'Eastron02 Total Power'].div(max_power_wm2)
     # Calculate the coefficient of performance (COP) for wm1
-    cop_fabr1 = diff_temp * ((isi + t_omg * iss) + pct_wm1 * (ssi + t_omg * sss)) + (iii + t_omg * iss) + pct_wm1 * (ssi + t_omg * sis)
+    cop_fabr1 = diff_temp * ((isi + t_omg * iss) + pct_wm1 * (ssi + t_omg * sss)) + (iii + t_omg * iis) + pct_wm1 * (sii + t_omg * sis)
     # Calculate the coefficient of performance (COP) for wm2
-    cop_fabr2 = diff_temp * ((isi + t_omg * iss) + pct_wm2 * (ssi + t_omg * sss)) + (iii + t_omg * iss) + pct_wm2 * (ssi + t_omg * sis)
+    cop_fabr2 = diff_temp * ((isi + t_omg * iss) + pct_wm2 * (ssi + t_omg * sss)) + (iii + t_omg * iis) + pct_wm2 * (sii + t_omg * sis)
     # Set COP_fabr1 to NaN if Eastron01 Total Power is below 300 We
     cop_fabr1[df.loc[rows_to_process, 'Eastron01 Total Power'] < minimum_WP_power] = np.nan
     # Set COP_fabr2 to NaN if Eastron02 Total Power is below 300 We
