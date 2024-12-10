@@ -67,8 +67,8 @@ if bRunTwoDaysBefore:
     three_days_previous = three_days_previous_date.strftime('%Y-%m-%d')
 else:
     # Below is the option to set the day manually
-    three_days_previous = '2024-10-13'
-    two_days_previous = '2024-10-14'
+    three_days_previous = '2024-11-27'
+    two_days_previous = '2024-11-28'
 
 
 
@@ -105,7 +105,7 @@ two_days_previous_datetime = pd.to_datetime(two_days_previous)
 df = df[df['Adjusted Timestamp'].dt.date == two_days_previous_datetime.date()]
 
 df = check_monotonic_and_fill_gaps(df, freq='15s')
-df = interpolate_nans(df, nLimit=maximum_interpolate_nans)
+df, dfMissing = interpolate_nans(df, nLimit=maximum_interpolate_nans)
 
 # First interpolate, then make sum of Eastron power. Otherwise, some interpolated values are missing in the sum.
 if 'Weather Abs Air Pressure' in df.columns:
@@ -164,6 +164,10 @@ df_1min = calc_weithed_mean_flow(df_1min, col_wm_flow='Q_klep_wm', col_flow='Bel
 df_1min = add_cop_values(df_1min)
 df_1hr = convert_to_1_hour_data(df_1min)
 
+if df_1hr['Itron Gas volume 1_diff'].isna().sum() == len(df_1hr):
+    # df_1hr['Itron Gas volume 1_diff'] = df_1hr['Itron Gas volume 1_actual'].ffill().diff().shift(-1).fillna(0)
+    df_1hr['Itron Gas volume 1_diff'] = df_1hr['Itron Gas volume 1_actual'].ffill().diff().fillna(0)
+
 # Fill missing weather data with KNMI data:
 # Construct start and end time for knmi data
 start_time = (df_1hr.index[0] - timedelta(days=1)).strftime('%Y%m%d%H')
@@ -191,16 +195,38 @@ email_subject = "Heatpump Monitoring"
 body = ""
 email_body = ""
 
+# Look for too many missing values on 15sec basis in original data
+dfMissing = dfMissing[~dfMissing.index.str.contains('Weather')]
+dfMissing = dfMissing[~dfMissing.index.str.contains('Eastron02')]
+bMissingSignalsOther = False
+if dfMissing[~dfMissing.index.str.contains('Belimo')].Sum.sum() > 100:
+    bMissingSignalsOther = True
+bMissingSignalsBelimo = False
+if dfMissing[dfMissing.index.str.contains('Belimo')].Fraction.mean() > 0.03:
+    bMissingSignalsBelimo = True
+
+
 if max_consecutive_issues:
     max_consecutive_str = '\n'.join([f"{k}: {v}" for k, v in max_consecutive_issues.items()])
     body += f"Columns with consecutive outliers:\n{max_consecutive_str}\n\n"
-    email_body += f"Columns with consecutive outliers:\n{max_consecutive_str}\n\n"
+    email_body += f"<p>Columns with consecutive outliers:</p><p>{max_consecutive_str}</p>"
 
 if message != "None":
     body += f"{message}\n\n"
-    email_body = f"{email_message}"
+    email_body += f"{email_message}"
+email_body = email_body.replace('\n','<br>')
+
+if bMissingSignalsBelimo or bMissingSignalsOther:
+    body += f"More missing 15sec values than expected:\n```{dfMissing.to_string()}\n\n"
+    # email_body = f"<p>More missing 15sec values than expected:</p><p>{dfMissing.to_string()}</p>"
+    email_body += f"<p>More missing 15sec values than expected:</p><p>{dfMissing.to_html(justify='left')}</p>"
+
+body = body.replace('\n','\n\r')
+email_body = email_body.replace('<th>','<th align="left">')
 
 # Send the email if there are any issues
 if body:
-    send_email(email_subject, email_body, "robert.mellema@dnv.com", sMeetsetFolder, two_days_previous) # With DNV, one needs to 'allow sender' within review of quarantined emails
+    # Within DNV, one needs to 'allow sender' within review of quarantined emails
+    send_email(email_subject, email_body, "robert.mellema@dnv.com", sMeetsetFolder, two_days_previous) 
+    send_email(email_subject, email_body, "lennart.vanluijk@dnv.com", sMeetsetFolder, two_days_previous) 
     send_teams_message(body, sMeetsetFolder, two_days_previous)

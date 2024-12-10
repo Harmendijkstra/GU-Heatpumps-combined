@@ -36,6 +36,8 @@ bWriteExcel = True
 bDebugStopExecutionHere = False # This is used before to run seperate file for the stress test of the script in between
 bReadPickles = False # This is used to read the pickles from the previous run, good for debugging, but not for normal use. It will than use var_names to read the pickles
 bRunPreviousWeek = True # This variable needs to be True if the script is runned automatically, to get the previous week data 
+#TODO set to True below
+bReportWord = True # This is used for reporting. For automated reporting, set to True.
 
 # If bReadPickles is True, the following variables will be read from the pickles
 # var_names = ['change_files', 'df_1hr_newheaders', 'sMeetsetFolder', 'df_1min_newheaders', 'outliers_count'] # Used to save and read variables from pickles
@@ -593,11 +595,13 @@ def convert_to_1_minute_data(df, totalizer_dict):
     # Identify non-totalizer columns
     non_totalizer_columns = list(set(df.columns) - set(f'{col}_actual' for col in totalizer_dict.keys()))
     totalizer_columns = [f'{col}_actual' for col in totalizer_dict.keys()]
-    
+#TODO Check if resampling works like this    
     # Resample to 1-minute intervals and calculate the mean for normal columns
+    #df_1min_non_totalizer = df[non_totalizer_columns].resample('1min', origin='end', offset='15s').mean()
     df_1min_non_totalizer = df[non_totalizer_columns].resample('1min').mean()
 
     # For totalizer columns, take the value at the zero second within that minute
+    #df_1min_totalizer = df[totalizer_columns].resample('1min', origin='end', offset='15s').first()
     df_1min_totalizer = df[totalizer_columns].resample('1min').first()
 
     # Combine the two DataFrames
@@ -633,15 +637,20 @@ def convert_to_1_hour_data(df_1min):
             return pd.NA
         return x.mean()
 
+    #df_1hr[colsMean] = df_1min[colsMean].resample('h', origin='end', offset='1min').apply(custom_mean)
     df_1hr[colsMean] = df_1min[colsMean].resample('h').apply(custom_mean)
     
     # Resample actual columns (first value per hour)
+    #df_1hr[colsActual] = df_1min[colsActual].resample('h', origin='end', offset='1min').first()
     df_1hr[colsActual] = df_1min[colsActual].resample('h').first()
-    
+#TODO Check if resampling works like this     
     # Resample diff columns (difference between first and last actual values, respecting NaN streaks)
     for col in colsDiff:
         actual_col = col[:-4] + '_actual'  # Strip '_diff' and add '_actual'
         if actual_col in colsActual:
+#            df_1hr[col] = df_1min[actual_col].resample('h', origin='end', offset='1min').apply(
+#                lambda x: (x[-1] - x[0]) if not has_nan_streak(x, 5) else pd.NA
+#            )
             df_1hr[col] = df_1min[actual_col].resample('h').apply(
                 lambda x: (x[-1] - x[0]) if not has_nan_streak(x, 5) else pd.NA
             )
@@ -728,7 +737,7 @@ def interpolate_nans(df, nLimit=None):
     df = df.apply(interpolate, thresh=nLimit)
     # And deal with the first rows as well:
     df.iloc[:, 3:] = df.iloc[:, 3:].bfill(axis=0)
-    return df
+    return df, dfMissing
 
 def calc_weithed_mean_flow(df_1min, col_wm_flow, col_flow, col_tempout, col_tempin):
     df_1min = df_1min.copy()
@@ -961,10 +970,11 @@ if __name__ == "__main__":
         prefix = '1min - RV - '
         weeks_with_year = add_enthalpy_calcualations(df_1min_newheaders, pRVMeetFolder, year, prefix=prefix)
         copy_output_to_automaticreporting(weeks_with_year)
-        create_word_documents(sMeetsetFolder, location, weeks_with_year, pWord)
+        knmi_data_used = False
+        create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_used, pWord)
+
     else:
         
-
         # Read data into pickles
         if bReadData:
             process_and_save(pBase, pInput, pPickles, sMeetsetFolder)
@@ -1014,7 +1024,7 @@ if __name__ == "__main__":
             os.makedirs(filedir)
         df.to_excel(filepath)
         
-        df = interpolate_nans(df, nLimit=maximum_interpolate_nans)
+        df, dfMissing = interpolate_nans(df, nLimit=maximum_interpolate_nans)
         # First interpolate, then make sum of Eastron power. Otherwise, some interpolated values are missing in the sum.
         if 'Weather Abs Air Pressure' in df.columns:
             # Convert pgasin from barg to bara, but if air pressure is below minimum_atmospheric_pressure mbar, add atmospheric_pressure to the value instead of reading the air pressure
@@ -1091,9 +1101,12 @@ if __name__ == "__main__":
         df_1min = calc_weithed_mean_flow(df_1min, col_wm_flow='Q_WP_wm', col_flow='Belimo03 FlowRate', col_tempout='Belimo03 Temp2 internal', col_tempin='Belimo03 Temp1 external')
 
         df_1min = add_cop_values(df_1min)
-
         df_1hr = convert_to_1_hour_data(df_1min)
-        
+
+        if df_1hr['Itron Gas volume 1_diff'].isna().sum() == len(df_1hr):
+            df_1hr['Itron Gas volume 1_diff'] = df_1hr['Itron Gas volume 1_actual'].ffill().diff().shift(-1).fillna(0)
+            #df_1hr['Itron Gas volume 1_diff'] = df_1hr['Itron Gas volume 1_actual'].ffill().diff().fillna(0)
+
         # Fill missing weather data with KNMI data:
         # Construct start and end time for knmi data
         # Record whether we use knmi data by comparing number of NaN values before and after filling
@@ -1154,8 +1167,9 @@ if __name__ == "__main__":
             weeks_with_year = add_enthalpy_calcualations(df_1hr_newheaders, pRVMeetFolder, year, prefix=prefix)
             prefix = '1min - RV - '
             weeks_with_year = add_enthalpy_calcualations(df_1min_newheaders, pRVMeetFolder, year, prefix=prefix)
-            copy_output_to_automaticreporting(weeks_with_year)
-            create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_used, pWord)
+            if bReportWord:
+                copy_output_to_automaticreporting(weeks_with_year)
+                create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_used, pWord)
             
             
             

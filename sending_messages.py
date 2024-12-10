@@ -57,12 +57,13 @@ def send_email(subject, body, email_receiver, sMeetsetFolder, previous_day):
     msg['From'] = email_sender
     msg['To'] = email_receiver
 
-    intro_message = f"Hello colleagues,\n\nDaily data report for {sMeetsetFolder} at {previous_day}.\n"
-    end_message = "\n\nGreetings,\nHeatpump Monitoring System"
+    intro_message = f"<p>Hello colleagues,<br><br>Daily data report for {sMeetsetFolder} at {previous_day}.</p>"
+    end_message = "<p>Greetings,\nHeatpump Monitoring System</p>"
     full_body = intro_message + body + end_message
 
     # Attach the plain text part to the email
-    part1 = MIMEText(full_body, 'plain')
+    part1 = MIMEText(full_body, 'html')
+    # part1 = MIMEText(full_body, 'plain')
     msg.attach(part1)
 
     try:

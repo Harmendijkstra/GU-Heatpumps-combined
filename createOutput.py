@@ -120,6 +120,15 @@ def save_dataframe_with_dates(df, lstHeaderMapping, folder_dir, prefix='', heade
         if col_name in decimal_places_mapping:
             df_output[col] = df_output[col].round(decimal_places_mapping[col_name])
 
+    # CORRECT the wrong timestamps in all files: the value of i.e. 2024-11-17 22:00 should be the PAST hour, so 21-22hrs.
+    # You can't look into the future after all..
+    if is_hourly and df_output.index[-1].time().hour == 23:
+        df_output.index = df_output.index.shift(1, freq='h')
+    elif not is_hourly and df_output.index[-1].time().minute == 59:
+        df_output.index = df_output.index.shift(1, freq='min')
+    df_output[("Datum", "", "")] = df_output.index.strftime('%d-%m-%Y')
+    df_output[("Tijd", "", "")] = df_output.index.strftime('%H:%M:%S')
+
     # Save the DataFrame to an Excel file using pd.ExcelWriter
     # If file exist, delete it
     if os.path.exists(file_path):

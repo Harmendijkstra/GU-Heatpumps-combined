@@ -59,7 +59,7 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
     if len(filepath_datadirs) == 0:
         print(f"No files found in {created_excel_output_folder} that contain '1hour - RV'.")
 
-    output_folder = os.path.join(pWord, 'Output', sMeetsetFolder)
+    output_folder = os.path.join(pWord, sMeetsetFolder)
     template_file = os.path.join(cwd, 'Automatic excel calculations', 'Input', 'Template document.docx')
     # Create the output directory if it doesn't exist
     if not os.path.exists(output_folder):
@@ -115,7 +115,8 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
                 ws = wb.Worksheets('Stat')
 
                 # Copy the data from the worksheet, including the formatting
-                ws.Range("A1").CurrentRegion.CopyPicture()
+                # ws.Range("A1").CurrentRegion.CopyPicture()
+                ws.Range("B1:O74").CopyPicture()
 
                 # Create a new Word application
                 wApp = win32.Dispatch('Word.Application')
@@ -146,30 +147,37 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
                 findReplace(wApp, wDoc, '{STAT_SHEET}')
                 wApp.Selection.Paste()
 
-                # Save the Excel file as a PDF
                 temp_dir = os.path.join(cwd, 'Automatic excel calculations', 'TemporaryStoredFiles')
                 if not os.path.exists(temp_dir):
                     os.makedirs(temp_dir)
-                temporary_pdf_path = os.path.join(temp_dir, 'temp.pdf')  
-                wb.ExportAsFixedFormat(0, temporary_pdf_path)
+                # # Save the Excel file as a PDF
+                # temporary_pdf_path = os.path.join(temp_dir, 'temp.pdf')  
+                # wb.ExportAsFixedFormat(0, temporary_pdf_path)
 
-                # Open the PDF file
-                doc_pdf = fitz.open(temporary_pdf_path)
+                # # Open the PDF file
+                # doc_pdf = fitz.open(temporary_pdf_path)
 
                 # Insert the PDF pages as images at the location marked by '{PDF_PAGES}'
                 findReplace(wApp, wDoc, '{PDF_PAGES}')
-                for page_num in range(doc_pdf.page_count - 3, doc_pdf.page_count):
-                    page_pdf = doc_pdf.load_page(page_num)
-                    mat = fitz.Matrix(300 / 72, 300 / 72)  # Create a zoom matrix
-                    pix = page_pdf.get_pixmap(matrix=mat)  # Get the pixmap with the zoom matrix
-                    img_file = os.path.join(temp_dir, f"page_{page_num + 1}.png")
-                    pix.save(img_file)
-                    pic = wApp.Selection.InlineShapes.AddPicture(img_file)
-                    pic.LockAspectRatio = 0  # Allow the picture to be resized
-                    pic.Width = wDoc.PageSetup.PageWidth - wDoc.PageSetup.LeftMargin - wDoc.PageSetup.RightMargin
-                    pic.Height = pic.Width * pic.Height / pic.Width
-                    wApp.Selection.TypeParagraph()
 
+
+                # for page_num in range(doc_pdf.page_count - 3, doc_pdf.page_count):
+                #     page_pdf = doc_pdf.load_page(page_num)
+                #     mat = fitz.Matrix(300 / 72, 300 / 72)  # Create a zoom matrix
+                #     pix = page_pdf.get_pixmap(matrix=mat)  # Get the pixmap with the zoom matrix
+                #     img_file = os.path.join(temp_dir, f"page_{page_num + 1}.png")
+                #     pix.save(img_file)
+                #     pic = wApp.Selection.InlineShapes.AddPicture(img_file)
+                #     #pic.LockAspectRatio = 0  # Allow the picture to be resized
+                #     #pic.Width = wDoc.PageSetup.PageWidth - wDoc.PageSetup.LeftMargin - wDoc.PageSetup.RightMargin
+                #     #pic.Height = pic.Width * pic.Height / pic.Width
+                #     wApp.Selection.TypeParagraph()
+
+                lstCharts = ["Chart1", "Chart2", "Chart3"]
+                for sChartName in lstCharts:
+                    wb.Charts(sChartName).ChartArea.Copy()
+                    wApp.Selection.PasteSpecial(IconIndex=0, Link=False, Placement=0, DisplayAsIcon=False, DataType=9)
+                    wApp.Selection.TypeParagraph()
                 # Save the Word document
                 wDoc.Save()
 
@@ -184,10 +192,14 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
                     os.remove(final_output_file)
                 os.rename(temp_output_file, final_output_file)
 
-                # Close the PDF file
-                doc_pdf.close()
+                # # Close the PDF file
+                # doc_pdf.close()
 
                 # Close the Excel file
+                fpathExcelOutput = os.path.join(output_folder,'ExcelFiles',f"Week{weekNo}-{excel_filename}")
+                if os.path.exists(fpathExcelOutput):
+                    os.remove(fpathExcelOutput)
+                wb.SaveAs(fpathExcelOutput)
                 wb.Close(SaveChanges=False)
                 xlApp.Quit()
                 del xlApp  # Clean up the Excel COM object
