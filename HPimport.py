@@ -65,9 +65,9 @@ if bRunPreviousWeek:
     sDateEnd = lastweekday.strftime('%Y-%m-%d')
 else:
     # Below is the option to set the date range manually
-    sDateStart = '2024-10-17'
+    sDateStart = '2024-12-22'
     # sDateEnd = '2025-12-31' #inclusive
-    sDateEnd = '2025-10-25'
+    sDateEnd = '2024-12-29'
 
 
 # Some global constants
@@ -784,9 +784,9 @@ def add_cop_values(df, rows_to_process=None):
     # pct_wm1 = df.loc[rows_to_process, 'Eastron01 Total Power'].div(max_power_wm1) no longer applicable
     # pct_wm2 = df.loc[rows_to_process, 'Eastron02 Total Power'].div(max_power_wm2) no longer applicable
     # Calculate the coefficient of performance (COP) for wm1
-    cop_fabr1 = diff_temp * ((isi + t_omg * iss) + pct_wm1 * (ssi + t_omg * sss)) + (iii + t_omg * iis) + pct_wm1 * (sii + t_omg * sis)
+    cop_fabr1 = pd.Series(diff_temp * ((isi + t_omg * iss) + pct_wm1 * (ssi + t_omg * sss)) + (iii + t_omg * iis) + pct_wm1 * (sii + t_omg * sis), index=rows_to_process)
     # Calculate the coefficient of performance (COP) for wm2
-    cop_fabr2 = diff_temp * ((isi + t_omg * iss) + pct_wm2 * (ssi + t_omg * sss)) + (iii + t_omg * iis) + pct_wm2 * (sii + t_omg * sis)
+    cop_fabr2 = pd.Series(diff_temp * ((isi + t_omg * iss) + pct_wm2 * (ssi + t_omg * sss)) + (iii + t_omg * iis) + pct_wm2 * (sii + t_omg * sis), index=rows_to_process)
     # Set COP_fabr1 to NaN if Eastron01 Total Power is below 300 We
     cop_fabr1[df.loc[rows_to_process, 'Eastron01 Total Power'] < minimum_WP_power] = np.nan
     # Set COP_fabr2 to NaN if Eastron02 Total Power is below 300 We
