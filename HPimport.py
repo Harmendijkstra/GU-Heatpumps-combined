@@ -34,9 +34,8 @@ station_deelen = 275
 bReadData = True
 bWriteExcel = True
 bDebugStopExecutionHere = False # This is used before to run seperate file for the stress test of the script in between
-bReadPickles = False # This is used to read the pickles from the previous run, good for debugging, but not for normal use. It will than use var_names to read the pickles
-bRunPreviousWeek = True # This variable needs to be True if the script is runned automatically, to get the previous week data 
-#TODO set to True below
+bReadPickles = True # This is used to read the pickles from the previous run, good for debugging, but not for normal use. It will than use var_names to read the pickles
+bRunPreviousWeek = False # This variable needs to be True if the script is runned automatically, to get the previous week data 
 bReportWord = True # This is used for reporting. For automated reporting, set to True.
 
 # If bReadPickles is True, the following variables will be read from the pickles
@@ -65,9 +64,10 @@ if bRunPreviousWeek:
     sDateEnd = lastweekday.strftime('%Y-%m-%d')
 else:
     # Below is the option to set the date range manually
-    sDateStart = '2024-12-22'
+    # sDateStart = '2024-08-01'
+    sDateStart = '2024-12-12'
     # sDateEnd = '2025-12-31' #inclusive
-    sDateEnd = '2024-12-29'
+    sDateEnd = '2025-12-29'
 
 
 # Some global constants
@@ -595,7 +595,6 @@ def convert_to_1_minute_data(df, totalizer_dict):
     # Identify non-totalizer columns
     non_totalizer_columns = list(set(df.columns) - set(f'{col}_actual' for col in totalizer_dict.keys()))
     totalizer_columns = [f'{col}_actual' for col in totalizer_dict.keys()]
-#TODO Check if resampling works like this    
     # Resample to 1-minute intervals and calculate the mean for normal columns
     #df_1min_non_totalizer = df[non_totalizer_columns].resample('1min', origin='end', offset='15s').mean()
     df_1min_non_totalizer = df[non_totalizer_columns].resample('1min').mean()
@@ -643,7 +642,6 @@ def convert_to_1_hour_data(df_1min):
     # Resample actual columns (first value per hour)
     #df_1hr[colsActual] = df_1min[colsActual].resample('h', origin='end', offset='1min').first()
     df_1hr[colsActual] = df_1min[colsActual].resample('h').first()
-#TODO Check if resampling works like this     
     # Resample diff columns (difference between first and last actual values, respecting NaN streaks)
     for col in colsDiff:
         actual_col = col[:-4] + '_actual'  # Strip '_diff' and add '_actual'
@@ -666,10 +664,31 @@ def interpolate(series, thresh=20):
     mask = nans.groupby([(~nans).cumsum(),nans]).transform('size') > thresh
     return series.interpolate(method='linear', limit_area='inside').mask(mask)
 
+def get_start_summer_time(year):
+    summer_start_date = datetime(year, 3, 31)
+    while summer_start_date.weekday() != 6:  # 6 is Sunday
+        summer_start_date -= timedelta(days=1)
+    return summer_start_date
+
+def get_start_winter_time(year):
+    winter_start_date = datetime(year, 10, 31)
+    while winter_start_date.weekday() != 6:  # 6 is Sunday
+        winter_start_date -= timedelta(days=1)
+    return winter_start_date
+
 def check_monotonic_and_fill_gaps(df, freq='15s', tolerance_hours=2):
-    def remove_duplicated_winter_time(df, winter_start_date):
-        # Create a mask for the overlapping hour (02:00 to 02:59) on the winter start date
-        overlap_hour_mask = (df.index.date == winter_start_date.date()) & (df.index.hour == 2)
+    def remove_duplicated_winter_time(df):
+        min_year = df.index.min().year
+        max_year = df.index.max().year
+
+        # Initialize an empty mask
+        overlap_hour_mask = pd.Series(False, index=df.index)
+
+        # Iterate over the range of years and create the mask
+        for year in range(min_year, max_year + 1):
+            winter_start_date = get_start_winter_time(year)
+            yearly_mask = (df.index.date == winter_start_date.date()) & (df.index.hour == 2)
+            overlap_hour_mask = overlap_hour_mask | yearly_mask
         
         # Get all indices within the overlapping hour
         overlapping_indices = df.index[overlap_hour_mask]
@@ -691,19 +710,15 @@ def check_monotonic_and_fill_gaps(df, freq='15s', tolerance_hours=2):
     amsterdam_tz = pytz.timezone('Europe/Amsterdam')
 
     # Get the date where the summer time (DST) starts this year
-    year = datetime.now().year
-    summer_start_date = datetime(year, 3, 31)
-    while summer_start_date.weekday() != 6:  # 6 is Sunday
-        summer_start_date -= timedelta(days=1)
+    this_year = datetime.now().year
+    summer_start_date = get_start_summer_time(this_year)
     
-    # Get the date where the winter time starts this year
-    year = datetime.now().year
-    winter_start_date = datetime(year, 10, 31)
-    while winter_start_date.weekday() != 6:  # 6 is Sunday
-        winter_start_date -= timedelta(days=1)
+    # Get the date where the winter time starts this year and years in the past within the dataframe
+    this_year = datetime.now().year
+    winter_start_date = get_start_winter_time(this_year)
 
     # Remove duplicates from the DataFrame index on the winter_start_date
-    df = remove_duplicated_winter_time(df, winter_start_date)
+    df = remove_duplicated_winter_time(df)
 
     # Check if the DataFrame index is monotonic increasing
     if not df.index.is_monotonic_increasing:
@@ -973,7 +988,7 @@ if __name__ == "__main__":
         prefix = '1hour - RV - '
         weeks_with_year = add_enthalpy_calcualations(df_1hr_newheaders, pRVMeetFolder, year, prefix=prefix)
         prefix = '1min - RV - '
-        weeks_with_year = add_enthalpy_calcualations(df_1min_newheaders, pRVMeetFolder, year, prefix=prefix)
+        # weeks_with_year = add_enthalpy_calcualations(df_1min_newheaders, pRVMeetFolder, year, prefix=prefix)
         copy_output_to_automaticreporting(weeks_with_year)
         knmi_data_used = False
         create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_used, pWord)

@@ -106,9 +106,11 @@ def perform_calculations(df_Ggas, df, interp_func, temperatures, pressures):
     df[('RV9', 'Q_str2', 'kJ/s')] = df[('RV6', 'm_gas_str2', 'kg/h')].mul(df[('RV8', 'dh_str2', 'kJ/kg')]) / 3600
     df[('RV10', 'Q_brgas', 'kJ/s')] = ((df[('MV15', 'V_gas_br', 'l/h')] /1000) * 35.17) / 3.6
     
-    dT_ketelw = df[('MV23', 'Tw_ket1_uit', '\u00b0C')].sub(df[('MV22', 'Tw_ket1_in', '\u00b0C')])
-    df[('RV11', 'Q_ket1', 'kJ/s')] = (df[('MV17', 'Vw_ket_1', 'l/h')] * 4.19 * (dT_ketelw)) / 3600
-    
+    # dT_ketelw = df[('MV23', 'Tw_ket1_uit', '\u00b0C')].sub(df[('MV22', 'Tw_ket1_in', '\u00b0C')])
+    # df[('RV11', 'Q_ket1', 'kJ/s')] = (df[('MV17', 'Vw_ket_1', 'l/h')] * 4.19 * (dT_ketelw)) / 3600
+    dT_ketelw = df[('MV28', 'Ts_OV_uit', '\u00b0C')].sub(df[('MV29', 'Ts_OV_in', '\u00b0C')])
+    df[('RV11', 'Q_ket1', 'kJ/s')] = (df[('MV20', 'Vw_ex_OV', 'l/h')] * 4.19 * (dT_ketelw)) / 3600 #Note that this is changed, using the OV instead of the ketel
+
     dT_WP = df[('MV35', 'T_WP_uit', '\u00b0C')].sub(df[('MV34', 'T_WP_in', '\u00b0C')])
     df[('RV14', 'Q_WP', 'kJ/s')] = (df[('MV21', 'Vw_WP', 'l/h')] * 4.19 * (dT_WP)) / 3600
     
@@ -157,33 +159,44 @@ def add_enthalpy_calcualations(df_1hr_newheaders, folder_dir, year, prefix=''):
     
     df_full = add_additional_columns(df_1hr_newheaders_withRV, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten)
     
-    weekno =  df_full.index.isocalendar().week
-    all_weeks = list(weekno.unique())
-    weeks_with_year = [year + '-' + str(no) for no in all_weeks]
-    
-    
-    
-    for no in all_weeks:
-        mask = weekno == no
+    # Get the unique weeks from the DataFrame index
+    iso_calendar = df_full.index.isocalendar()
+    all_weeks = list(set(zip(iso_calendar.year, iso_calendar.week)))
+    all_weeks.sort() # Sort the weeks
+    weeks_with_year = []
+
+    for year, no in all_weeks:
+        mask = (iso_calendar.year == year) & (iso_calendar.week == no)
         this_week = df_full[mask]
-        # Check whether the week is complete:
+        
+        # Check whether the week is complete
+        if mask.sum() == 0:
+            print(f'Skipping week {no} of year {year}, no data')
+            continue
         time_diff = this_week.index[-1] - this_week.index[0]
         skipping = False
         if not time_diff >= pd.Timedelta('6 days 23:00:00'):
             skipping = True
 
         if skipping:
-            print(f'Skipping week {no}, not complete week')
+            print(f'Skipping week {no} of year {year}, not complete week')
         else:
-            print(f'Saving week no {no}')
+            print(f'Saving week no {no} of year {year}')
             df_1hr_newheaders_withRV_week = df_1hr_newheaders_withRV[mask]
             df_1hr_newheaders_week = df_1hr_newheaders[mask]
+
+            # Get the first date in the DataFrame
+            first_date = df_1hr_newheaders_week.index[0]
+            # Get the ISO year and week number
+            iso_year, iso_week, _ = first_date.isocalendar()
+
             df_full_week = df_full[mask]
-            weekFolder = cmb(folder_dir, year + '-' +str(no))
+            weekFolder = os.path.join(str(folder_dir), f"{iso_year}-{iso_week:02d}")
+            weeks_with_year.append(weekFolder)
             if not os.path.exists(weekFolder):
                 os.makedirs(weekFolder)
-            weekPrefixRV = prefix + 'weekno - ' + str(no)
-            weekPrefix = prefix.replace('RV - ', '') + 'weekno - ' + str(no)
+            weekPrefixRV = f"{prefix}weekno - {iso_week}"
+            weekPrefix = f"{prefix.replace('RV - ', '')}weekno - {iso_week}"
             save_and_convert(df_1hr_newheaders_withRV_week, weekPrefixRV, weekFolder)
             save_and_convert(df_1hr_newheaders_week, weekPrefix, weekFolder)
             # fullweekPrefix = weekPrefix + 'full - '

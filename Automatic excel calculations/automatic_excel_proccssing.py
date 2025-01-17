@@ -185,9 +185,17 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
                 wDoc.Close(SaveChanges=0)
                 wApp.Quit()
                 del wApp  # Clean up the Word COM object
+                
+                # Get the directory name
+                directory_name_excel = os.path.dirname(filepath_datadir)
+
+                # Get the folder name
+                year_weekstr = os.path.basename(directory_name_excel)
+                if not os.path.exists(os.path.join(output_folder, year_weekstr)):
+                    os.makedirs(os.path.join(output_folder, year_weekstr))
 
                 # Rename the temporary output file to the final output file
-                final_output_file = os.path.join(output_folder, f"Weekrapport-{location}-week{weekNo}.docx")
+                final_output_file = os.path.join(output_folder, year_weekstr, f"Weekrapport-{location}-week{weekNo}.docx")
                 if os.path.exists(final_output_file):
                     os.remove(final_output_file)
                 os.rename(temp_output_file, final_output_file)
@@ -196,7 +204,7 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
                 # doc_pdf.close()
 
                 # Close the Excel file
-                fpathExcelOutput = os.path.join(output_folder,'ExcelFiles',f"Week{weekNo}-{excel_filename}")
+                fpathExcelOutput = os.path.join(output_folder,year_weekstr,f"Week{weekNo}-{excel_filename}")
                 if os.path.exists(fpathExcelOutput):
                     os.remove(fpathExcelOutput)
                 wb.SaveAs(fpathExcelOutput)
