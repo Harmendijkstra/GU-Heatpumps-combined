@@ -34,8 +34,8 @@ station_deelen = 275
 bReadData = True
 bWriteExcel = True
 bDebugStopExecutionHere = False # This is used before to run seperate file for the stress test of the script in between
-bReadPickles = True # This is used to read the pickles from the previous run, good for debugging, but not for normal use. It will than use var_names to read the pickles
-bRunPreviousWeek = False # This variable needs to be True if the script is runned automatically, to get the previous week data 
+bReadPickles = False # This is used to read the pickles from the previous run, good for debugging, but not for normal use. It will than use var_names to read the pickles
+bRunPreviousWeek = True # This variable needs to be True if the script is runned automatically, to get the previous week data 
 bReportWord = True # This is used for reporting. For automated reporting, set to True.
 
 # If bReadPickles is True, the following variables will be read from the pickles
@@ -65,7 +65,7 @@ if bRunPreviousWeek:
 else:
     # Below is the option to set the date range manually
     # sDateStart = '2024-08-01'
-    sDateStart = '2024-12-12'
+    sDateStart = '2023-12-12'
     # sDateEnd = '2025-12-31' #inclusive
     sDateEnd = '2025-12-29'
 
