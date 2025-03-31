@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from scipy.interpolate import interp2d
 from os.path import join as cmb
-from createOutput import convert_excel_output, save_dataframe_with_dates
+from createOutput import convert_excel_output, save_dataframe_with_dates, get_decimal_places_mapping
 import os
 
 def interpolate_2d(df_Ggas, temperature, pressure):
@@ -108,7 +108,7 @@ def perform_calculations(df_Ggas, df, interp_func, temperatures, pressures):
     
     # dT_ketelw = df[('MV23', 'Tw_ket1_uit', '\u00b0C')].sub(df[('MV22', 'Tw_ket1_in', '\u00b0C')])
     # df[('RV11', 'Q_ket1', 'kJ/s')] = (df[('MV17', 'Vw_ket_1', 'l/h')] * 4.19 * (dT_ketelw)) / 3600
-    dT_ketelw = df[('MV28', 'Ts_OV_uit', '\u00b0C')].sub(df[('MV29', 'Ts_OV_in', '\u00b0C')])
+    dT_ketelw = df[('MV28', 'Tw_OV_uit', '\u00b0C')].sub(df[('MV29', 'Tw_OV_in', '\u00b0C')])
     df[('RV11', 'Q_ket1', 'kJ/s')] = (df[('MV20', 'Vw_ex_OV', 'l/h')] * 4.19 * (dT_ketelw)) / 3600 #Note that this is changed, using the OV instead of the ketel
 
     dT_WP = df[('MV35', 'T_WP_uit', '\u00b0C')].sub(df[('MV34', 'T_WP_in', '\u00b0C')])
@@ -148,16 +148,16 @@ def save_and_convert(df, prefix, weekFolder):
     convert_excel_output(weekFolder, change_files)
     return fpath
 
-def add_enthalpy_calcualations(df_1hr_newheaders, folder_dir, year, prefix=''):
+def add_enthalpy_calcualations(df, folder_dir, year, prefix=''):
     sEnthalpyTable = 'EnthalpyInput/EnthalpyTable.xlsx'    
     df_Ggas = load_enthalpy_table(sEnthalpyTable)
     interp_func, temperatures, pressures = create_interpolation_function(df_Ggas)
     
-    df_1hr_newheaders_withRV = df_1hr_newheaders.copy()
+    df_withRV = df.copy()
     
-    df_1hr_newheaders_withRV, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten = perform_calculations(df_Ggas, df_1hr_newheaders_withRV, interp_func, temperatures, pressures)
+    df_withRV, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten = perform_calculations(df_Ggas, df_withRV, interp_func, temperatures, pressures)
     
-    df_full = add_additional_columns(df_1hr_newheaders_withRV, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten)
+    df_full = add_additional_columns(df_withRV, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten)
     
     # Get the unique weeks from the DataFrame index
     iso_calendar = df_full.index.isocalendar()
@@ -182,8 +182,8 @@ def add_enthalpy_calcualations(df_1hr_newheaders, folder_dir, year, prefix=''):
             print(f'Skipping week {no} of year {year}, not complete week')
         else:
             print(f'Saving week no {no} of year {year}')
-            df_1hr_newheaders_withRV_week = df_1hr_newheaders_withRV[mask]
-            df_1hr_newheaders_week = df_1hr_newheaders[mask]
+            df_1hr_newheaders_withRV_week = df_withRV[mask]
+            df_1hr_newheaders_week = df[mask]
 
             # Get the first date in the DataFrame
             first_date = df_1hr_newheaders_week.index[0]
@@ -197,8 +197,62 @@ def add_enthalpy_calcualations(df_1hr_newheaders, folder_dir, year, prefix=''):
                 os.makedirs(weekFolder)
             weekPrefixRV = f"{prefix}weekno - {iso_week}"
             weekPrefix = f"{prefix.replace('RV - ', '')}weekno - {iso_week}"
+            
+            if prefix.startswith('1min'):
+                # Sum the dataframe per day, excluding 'Datum' and 'Tijd' columns
+                df_daily_sum = df_1hr_newheaders_withRV_week.resample('D').sum()
+                # Sum the entire dataframe, excluding 'Datum' and 'Tijd' columns
+                df_total_sum = df_1hr_newheaders_withRV_week.sum()
+                df_total_sum_rounded = df_total_sum.to_frame(name='Total').T
+
+                # Define the file paths
+                daily_file_path = os.path.join(weekFolder, f"Daily - sum - {weekPrefix}.xlsx")
+                weekly_file_path = os.path.join(weekFolder, f"Weekly - sum - {weekPrefix}.xlsx")
+
+                # Get decimal places mapping for the daily and weekly DataFrames
+                daily_decimal_places = get_decimal_places_mapping(df_daily_sum, input_type='df')
+                weekly_decimal_places = get_decimal_places_mapping(df_total_sum.to_frame().T, input_type='df')
+
+                # Round the daily summed DataFrame based on decimal places
+                for col in df_daily_sum.columns:
+                    col_name = col[0]  # Assuming the first level of the MultiIndex is the key
+                    if col_name in daily_decimal_places:
+                        df_daily_sum[col] = df_daily_sum[col].round(daily_decimal_places[col_name])
+
+                # Round the weekly summed DataFrame based on decimal places
+                for col in df_total_sum_rounded.columns:
+                    col_name = col[0]  # Assuming the first level of the MultiIndex is the key
+                    if col_name in weekly_decimal_places:
+                        # Ensure the column is numeric before rounding
+                        df_total_sum_rounded[col] = pd.to_numeric(df_total_sum_rounded[col], errors='coerce')
+                        # Apply rounding
+                        df_total_sum_rounded[col] = df_total_sum_rounded[col].round(int(weekly_decimal_places[col_name]))
+                
+                df_daily_sum.columns = df_daily_sum.columns.get_level_values(1)
+                df_total_sum_rounded.columns = df_total_sum_rounded.columns.get_level_values(1)
+
+                # Save the daily summed DataFrame
+                df_daily_sum.to_excel(daily_file_path, index=True)
+
+                # Save the weekly summed DataFrame
+                df_total_sum_rounded.to_excel(weekly_file_path, index=True)
+    
+            # Note that the following code, to delete the columns is needed as we did not wanted to change VBA in excel but we needed the additional columns for correct computations on the summed data
+            if ('AV8', 'Q_fabr1', 'W') in df_1hr_newheaders_withRV_week.columns:
+                df_1hr_newheaders_withRV_week.drop(columns=[('AV8', 'Q_fabr1', 'W')], inplace=True)
+            if ('AV9', 'Q_fabr2', 'W') in df_1hr_newheaders_withRV_week.columns:
+                df_1hr_newheaders_withRV_week.drop(columns=[('AV9', 'Q_fabr2', 'W')], inplace=True)
+            if ('AV8', 'Q_fabr1', 'W') in df_1hr_newheaders_week.columns:
+                df_1hr_newheaders_week.drop(columns=[('AV8', 'Q_fabr1', 'W')], inplace=True)
+            if ('AV9', 'Q_fabr2', 'W') in df_1hr_newheaders_week.columns:
+                df_1hr_newheaders_week.drop(columns=[('AV9', 'Q_fabr2', 'W')], inplace=True)
+            if ('AV10', 'Q_fabrikant', 'W') in df_1hr_newheaders_withRV_week.columns:
+                df_1hr_newheaders_withRV_week.drop(columns=[('AV10', 'Q_fabrikant', 'W')], inplace=True)
+            if ('AV10', 'Q_fabrikant', 'W') in df_1hr_newheaders_week.columns:
+                df_1hr_newheaders_week.drop(columns=[('AV10', 'Q_fabrikant', 'W')], inplace=True)
             save_and_convert(df_1hr_newheaders_withRV_week, weekPrefixRV, weekFolder)
             save_and_convert(df_1hr_newheaders_week, weekPrefix, weekFolder)
+
             # fullweekPrefix = weekPrefix + 'full - '
             # save_and_convert(df_full_week, fullweekPrefix, weekFolder)
-    return weeks_with_year
+    return df_full, weeks_with_year

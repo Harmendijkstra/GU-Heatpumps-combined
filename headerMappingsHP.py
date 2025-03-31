@@ -49,8 +49,8 @@ def makeAllHeaderMappings():
         'Belimo03 FlowRate':         ['MV21','Vw_WP','l/h'],
         'Belimo01 Temp1 external':      ['MV22','Tw_ket1_in','\u00b0C'], 
         'Belimo01 Temp2 internal':      ['MV23','Tw_ket1_uit','\u00b0C'],
-        'Belimo02 Temp2 internal':      ['MV28','Ts_OV_uit','\u00b0C'],
-        'Belimo02 Temp1 external':      ['MV29','Ts_OV_in','\u00b0C'],
+        'Belimo02 Temp2 internal':      ['MV28','Tw_OV_uit','\u00b0C'],
+        'Belimo02 Temp1 external':      ['MV29','Tw_OV_in','\u00b0C'],
         'ADAM PT1000 01':               ['MV30','Tb_1','\u00b0C'],
         'ADAM PT1000 02':               ['MV31','Tb_2','\u00b0C'],
         'ADAM PT1000 03':               ['MV32','Tb_3','\u00b0C'],
@@ -67,6 +67,9 @@ def makeAllHeaderMappings():
         'COP_fabr1':                      ['AV5','COP_fabr1','-'],
         'COP_fabr2':                      ['AV6','COP_fabr2','-'],
         'COP_fabr':                      ['AV7','COP_fabr','-'],
+        'Q_fabr1':                      ['AV8','Q_fabr1','W'],
+        'Q_fabr2':                      ['AV9','Q_fabr2','W'],
+        'Q_fabrikant':                      ['AV10','Q_fabrikant','W'],
     }
     return lstHeaderMapping
 

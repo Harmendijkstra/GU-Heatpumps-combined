@@ -186,7 +186,7 @@ dictHeaderMapping = hHP.genHeaders(df_1min.columns)
 df_1hr_newheaders = create_output_dataframe(df_1hr, dictHeaderMapping, is_hourly=True)
 
 # Columns to ignore
-ignore_columns = ['V_gas_br', 'Pe_WP1', 'Pe_WP2', 'COP_fabr1', 'COP_fabr2', 'COP_fabr'] # Columns to ignore when checking for NaN values
+ignore_columns = ['Pe_WP2', 'COP_fabr1', 'COP_fabr2', 'COP_fabr', 'Q_fabr1', 'Q_fabr2', 'Q_fabrikant'] # Columns to ignore when checking for NaN values
 message, email_message = check_nans(df_1hr_newheaders, ignore_columns)
 # Check max_consecutive_count
 max_consecutive_issues = {k: v for k, v in max_consecutive_count.items() if v > 1}

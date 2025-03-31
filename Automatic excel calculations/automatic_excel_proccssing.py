@@ -5,7 +5,8 @@ import os
 import fitz  # PyMuPDF
 import time
 from datetime import datetime
-
+import pandas as pd
+import numpy as np
 
 # Get the current working directory
 cwd = os.getcwd()
@@ -34,10 +35,25 @@ def findReplace(wApp, wDoc, find_str, replace_str='none'):
     else:
         wCont.Find.Execute(find_str, False, False, False, False, False, True, wdFindContinue, False, replace_str, wdReplaceAll)
 
+def write_to_excel(df, ws_name, wb):
+    # Get or create the ws_name sheet
+    try:
+        ws = wb.Worksheets(ws_name)
+    except Exception:
+        ws = wb.Worksheets.Add()
+        ws.Name = ws_name
+    # Clear the sheets before pasting new data
+    ws.Cells.Clear()
+    # Write the DataFrame to the sheet
+    for i, col in enumerate(df.columns, start=1):
+        ws.Cells(1, i).Value = col  # Write column headers
+    for row_idx, row in enumerate(df.itertuples(index=False), start=2):
+        for col_idx, value in enumerate(row, start=1):
+            ws.Cells(row_idx, col_idx).Value = value
 
 def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_used, pWord, retry_count=1):
     # filepath_datadir = cwd + '/ExcelCalculations/Regulier/Uurwaarden/1hour - RV - weekno - 36Energy Balance - 02-09-2024 - 08-09-2024.xlsx'
-    excel_filename = 'Uitwerk light uurbasis zonder koeler RM.xlsm'
+    excel_filename = 'Uitwerk light uurbasis zonder koeler RM-new.xlsm'
     excel_filepath = os.path.abspath(os.path.join(cwd, 'Automatic excel calculations', 'Input', excel_filename))
     # Construct the TrustedDocuments path
     cwd_parts = cwd.split('\\')
@@ -68,9 +84,37 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
     xlApp = None
     wApp = None
 
-    # Loop throught the weeks specified in all_weeks, from HPImport.py:
+    # Loop through the weeks specified in all_weeks, from HPImport.py:
     for filepath_datadir in filepath_datadirs:
         print(f"Processing file: {filepath_datadir}")
+        parent_dir = os.path.dirname(filepath_datadir)
+        files_in_folder = get_all_files(parent_dir)
+        
+        file_sum_week = [f for f in files_in_folder if 'Weekly' in f]
+        file_sum_day = [f for f in files_in_folder if 'Daily' in f]
+        # Check if there is precisely one file in file_sum_week
+        if len(file_sum_week) == 1:
+            # Load the file into a DataFrame
+            file_path = file_sum_week[0]
+            df_weekly_sum = pd.read_excel(file_path)
+
+        else:
+            raise ValueError(f"Expected precisely one file containing 'Weekly' in '{created_excel_output_folder}', but found {len(file_sum_week)}.")
+        # Check if there is precisely one file in file_sum_day
+        if len(file_sum_day) == 1:
+            # Load the file into a DataFrame
+            file_path = file_sum_day[0]
+            df_daily_sum = pd.read_excel(file_path)
+            # Replace timezone-naive timestamps with NaN
+            if 'Adjusted Timestamp' in df_daily_sum.columns:
+                if pd.api.types.is_datetime64_any_dtype(df_daily_sum['Adjusted Timestamp']):
+                    # Check if the column contains timezone-naive timestamps
+                    if df_daily_sum['Adjusted Timestamp'].dt.tz is None:
+                        df_daily_sum['Adjusted Timestamp'] = np.nan
+                        print("Replaced timezone-naive timestamps in 'Adjusted Timestamp' with NaN.")
+        else:
+            raise ValueError(f"Expected precisely one file containing 'Daily' in '{created_excel_output_folder}', but found {len(file_sum_day)}.")
+        
         attempt = 0
         finished = False
         while (attempt <= retry_count) and not finished:
@@ -79,18 +123,21 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
                 # However, this directory does not exist for the 'meetlaptops' and in that case is the TrustedDocuments directory not needed
                 
                 # Therefore, check if the TrustedDocuments directory exists, if not than use a temporary directory
+                used_trusted_documents_dir = None
                 if os.path.exists(trusted_documents_dir):
                     # Copy the Excel file to the TrustedDocuments directory
+                    used_trusted_documents_dir = 'TrustedDocuments'
                     filename_data = os.path.join(trusted_documents_dir, excel_filename)          
                 else:
+                    used_trusted_documents_dir = 'TemporaryStoredFiles'
                     filename_data = os.path.join(cwd, 'Automatic excel calculations', 'TemporaryStoredFiles', excel_filename)
 
                 # Delete the file if it already exists
                 if os.path.exists(filename_data):
                     os.remove(filename_data)
 
-                # Wait for 2 seconds to observe the changes
-                time.sleep(2)
+                # Wait for 5 seconds to observe the changes
+                time.sleep(5)
                 shutil.copy2(excel_filepath, filename_data)
 
                 filepath_exceltool = os.path.abspath(filename_data)
@@ -104,6 +151,16 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
 
                 # Wait for 10 seconds to observe the changes
                 time.sleep(10)
+
+                try:
+                    ws_sum_day = wb.Worksheets('Sum_minutes_day')
+                except Exception:
+                    ws_sum_day = wb.Worksheets.Add()
+                    ws_sum_day.Name = 'Sum_minutes_day'
+
+                write_to_excel(df_daily_sum, 'Sum_minutes_day', wb)
+                write_to_excel(df_weekly_sum, 'Sum_minutes_week', wb)
+
                 wb.Application.ScreenUpdating = True
                 xlApp.Visible = True
 
@@ -116,7 +173,7 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
 
                 # Copy the data from the worksheet, including the formatting
                 # ws.Range("A1").CurrentRegion.CopyPicture()
-                ws.Range("B1:O74").CopyPicture()
+                ws.Range("B1:O75").CopyPicture()
 
                 # Create a new Word application
                 wApp = win32.Dispatch('Word.Application')
@@ -178,14 +235,7 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
                     wb.Charts(sChartName).ChartArea.Copy()
                     wApp.Selection.PasteSpecial(IconIndex=0, Link=False, Placement=0, DisplayAsIcon=False, DataType=9)
                     wApp.Selection.TypeParagraph()
-                # Save the Word document
-                wDoc.Save()
 
-                # Close the Word document before renaming
-                wDoc.Close(SaveChanges=0)
-                wApp.Quit()
-                del wApp  # Clean up the Word COM object
-                
                 # Get the directory name
                 directory_name_excel = os.path.dirname(filepath_datadir)
 
@@ -194,11 +244,33 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
                 if not os.path.exists(os.path.join(output_folder, year_weekstr)):
                     os.makedirs(os.path.join(output_folder, year_weekstr))
 
-                # Rename the temporary output file to the final output file
-                final_output_file = os.path.join(output_folder, year_weekstr, f"Weekrapport-{location}-week{weekNo}.docx")
-                if os.path.exists(final_output_file):
-                    os.remove(final_output_file)
-                os.rename(temp_output_file, final_output_file)
+                try:
+                    save_document = 'normal'
+                    # Disable Word alerts to suppress the save confirmation popup
+                    wApp.DisplayAlerts = False
+                    print("Saving the Word document...")
+                    time.sleep(1)
+                    # Save the Word document
+                    wDoc.Save()
+                    # Explicitly mark the document as saved
+                    wDoc.Saved = True
+                    print() # Empty line for better readability
+                    time.sleep(1)
+                    # Close the Word document before renaming
+                    wDoc.Close(SaveChanges=0)
+                    time.sleep(1)
+                    wApp.Quit()
+                    del wApp  # Clean up the Word COM object
+                except Exception as e:
+                    print(f"Error saving the Word document. Error:{e}")
+
+
+                if save_document=='normal':
+                    # Rename the temporary output file to the final output file
+                    final_output_file = os.path.join(output_folder, year_weekstr, f"Weekrapport-{location}-week{weekNo}.docx")
+                    if os.path.exists(final_output_file):
+                        os.remove(final_output_file)
+                    os.rename(temp_output_file, final_output_file)
 
                 # # Close the PDF file
                 # doc_pdf.close()
@@ -213,19 +285,21 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
                 del xlApp  # Clean up the Excel COM object
 
                 # Delete all files in the TemporaryStoredFiles directory
-                for file in os.listdir(temp_dir):
-                    file_path = os.path.join(temp_dir, file)
-                    if os.path.isfile(file_path):
-                        os.remove(file_path)
+                if used_trusted_documents_dir == 'TemporaryStoredFiles':
+                    for file in os.listdir(temp_dir):
+                        file_path = os.path.join(temp_dir, file)
+                        if os.path.isfile(file_path):
+                            os.remove(file_path)
 
-                print('Sleep for 2 seconds such that excel can be closed')
-                time.sleep(2)
+                print('Sleep for 5 seconds such that excel can be closed')
+                time.sleep(5)
 
                 # Delete the file in TrustedDocuments at the very end
-                try:
-                    os.remove(filename_data)
-                except FileNotFoundError:
-                    print(f"File {filename_data} not found, cannot delete")
+                if used_trusted_documents_dir == 'TrustedDocuments':
+                    try:
+                        os.remove(filename_data)
+                    except FileNotFoundError:
+                        print(f"File {filename_data} not found, cannot delete")
 
                 attempt = 0  # Reset the attempt counter
                 finished = True
