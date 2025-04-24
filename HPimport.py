@@ -16,7 +16,7 @@ import pytz
 import struct
 import headerMappingsHP as hHP
 from createOutput import save_dataframe_with_dates, convert_excel_output, create_output_dataframe
-from enthalpyCalculations import add_enthalpy_calcualations
+from enthalpyCalculations import process_minute_data, process_hour_data
 import pickle
 import shutil
 import sys
@@ -35,7 +35,7 @@ bReadData = True
 bWriteExcel = True
 bDebugStopExecutionHere = False # This is used before to run seperate file for the stress test of the script in between
 bReadPickles = False # This is used to read the pickles from the previous run, good for debugging, but not for normal use. It will than use var_names to read the pickles
-bRunPreviousWeek = True # This variable needs to be True if the script is runned automatically, to get the previous week data 
+bRunPreviousWeek = False # This variable needs to be True if the script is runned automatically, to get the previous week data 
 bReportWord = True # This is used for reporting. For automated reporting, set to True.
 
 # If bReadPickles is True, the following variables will be read from the pickles
@@ -65,9 +65,9 @@ if bRunPreviousWeek:
 else:
     # Below is the option to set the date range manually
     # sDateStart = '2024-08-01'
-    sDateStart = '2024-11-10'
+    sDateStart = '2022-03-23'
     # sDateEnd = '2025-12-31' #inclusive
-    sDateEnd = '2025-11-12'
+    sDateEnd = '2024-11-25'
 
 
 # Some global constants
@@ -644,14 +644,17 @@ def convert_to_1_hour_data(df_1min):
     df_1hr[colsActual] = df_1min[colsActual].resample('h').first()
     # Resample diff columns (difference between first and last actual values, respecting NaN streaks)
     for col in colsDiff:
-        actual_col = col[:-4] + '_actual'  # Strip '_diff' and add '_actual'
+        actual_col = col[:-5] + '_actual'  # Strip '_diff' and add '_actual'
         if actual_col in colsActual:
+            def custom_sum(x):
+                if has_nan_streak(x, 5):
+                    return pd.NA
+                return x.sum()
 #            df_1hr[col] = df_1min[actual_col].resample('h', origin='end', offset='1min').apply(
 #                lambda x: (x[-1] - x[0]) if not has_nan_streak(x, 5) else pd.NA
 #            )
-            df_1hr[col] = df_1min[actual_col].resample('h').apply(
-                lambda x: (x[-1] - x[0]) if not has_nan_streak(x, 5) else pd.NA
-            )
+            df_1hr[col] = df_1min[col].resample('h').apply(custom_sum)
+
     
     return df_1hr
 
@@ -1210,8 +1213,6 @@ if __name__ == "__main__":
 
         df_1min = add_cop_values(df_1min)
         df_1hr = convert_to_1_hour_data(df_1min) # Convert to 1 hour data again, because we have added the COP values
-
-        df_1hr['Itron Gas volume 1_diff'] = df_1hr['Itron Gas volume 1_diff']*1000 # Convert first from m3/h to l/h']
     
         if bDebugStopExecutionHere:
             df_1min.to_excel(cmb(pRV, '1min_' + sMeetsetFolder + datetime.now().strftime('_%Y-%m-%d_%Hh%M.xlsx')))
@@ -1240,13 +1241,12 @@ if __name__ == "__main__":
             # convert_excel_output(pBase, change_files)
 
             prefix = '1min - RV - '
-            df_1min_full, weeks_with_year = add_enthalpy_calcualations(df_1min_newheaders, pRVMeetFolder, year, prefix=prefix)
+            df_1min_full, weeks_with_year = process_minute_data(df_1min_newheaders, pRVMeetFolder, prefix=prefix)
             prefix = '1hour - RV - '
-            df_1hour_full, weeks_with_year = add_enthalpy_calcualations(df_1hr_newheaders, pRVMeetFolder, year, prefix=prefix)
+            df_hourly_full = process_hour_data(df_1min_full, df_1hr_newheaders, pRVMeetFolder, prefix=prefix)
 
             if bReportWord:
                 copy_output_to_automaticreporting(weeks_with_year)
                 create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_used, pWord)
-            
             
             

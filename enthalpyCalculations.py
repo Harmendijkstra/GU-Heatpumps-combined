@@ -104,11 +104,23 @@ def perform_calculations(df_Ggas, df, interp_func, temperatures, pressures):
 
     df[('RV8', 'dh_str2', 'kJ/kg')] = (df[('RV7', 'h_uit_str2', 'kJ/kg')].sub(df[('RV1', 'h_gas_in', 'kJ/kg')])).clip(lower=0)
     df[('RV9', 'Q_str2', 'kJ/s')] = df[('RV6', 'm_gas_str2', 'kg/h')].mul(df[('RV8', 'dh_str2', 'kJ/kg')]) / 3600
-    df[('RV10', 'Q_brgas', 'kJ/s')] = ((df[('MV15', 'V_gas_br', 'l/h')] /1000) * 35.17) / 3.6
-    
+    dT_ketelw = df[('MV28', 'Tw_OV_uit', '\u00b0C')].sub(df[('MV29', 'Tw_OV_in', '\u00b0C')])
+    # valid_condition = ((df[('MV15', 'V_gas_br', 'l/h')] != 0) & (df[('MV28', 'Tw_OV_uit', '°C')] >= df[('MV29', 'Tw_OV_in', '°C')])) This should be done on hourly basis not minute basis as V_gas_br is not that precise 
     # dT_ketelw = df[('MV23', 'Tw_ket1_uit', '\u00b0C')].sub(df[('MV22', 'Tw_ket1_in', '\u00b0C')])
     # df[('RV11', 'Q_ket1', 'kJ/s')] = (df[('MV17', 'Vw_ket_1', 'l/h')] * 4.19 * (dT_ketelw)) / 3600
-    dT_ketelw = df[('MV28', 'Tw_OV_uit', '\u00b0C')].sub(df[('MV29', 'Tw_OV_in', '\u00b0C')])
+    # df[('RV10', 'Q_brgas', 'kJ/s')] = np.where(
+    #     valid_condition,
+    #     ((df[('MV15', 'V_gas_br', 'l/h')] / 1000) * 35.17) / 3.6 * 60,
+    #     np.nan
+    # )
+
+    # df[('RV11', 'Q_ket1', 'kJ/s')] = np.where(
+    #     valid_condition,
+    #     (df[('MV20', 'Vw_ex_OV', 'l/h')] * 4.19 * (dT_ketelw)) / 3600, #Note that this is changed, using the OV instead of the ketel
+    #     np.nan
+    # )
+
+    df[('RV10', 'Q_brgas', 'kJ/s')] = ((df[('MV15', 'V_gas_br', 'l/h')] / 1000) * 35.17) / 3.6 * 60
     df[('RV11', 'Q_ket1', 'kJ/s')] = (df[('MV20', 'Vw_ex_OV', 'l/h')] * 4.19 * (dT_ketelw)) / 3600 #Note that this is changed, using the OV instead of the ketel
 
     dT_WP = df[('MV35', 'T_WP_uit', '\u00b0C')].sub(df[('MV34', 'T_WP_in', '\u00b0C')])
@@ -148,17 +160,8 @@ def save_and_convert(df, prefix, weekFolder):
     convert_excel_output(weekFolder, change_files)
     return fpath
 
-def add_enthalpy_calcualations(df, folder_dir, year, prefix=''):
-    sEnthalpyTable = 'EnthalpyInput/EnthalpyTable.xlsx'    
-    df_Ggas = load_enthalpy_table(sEnthalpyTable)
-    interp_func, temperatures, pressures = create_interpolation_function(df_Ggas)
-    
-    df_withRV = df.copy()
-    
-    df_withRV, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten = perform_calculations(df_Ggas, df_withRV, interp_func, temperatures, pressures)
-    
-    df_full = add_additional_columns(df_withRV, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten)
-    
+
+def process_all_weeks(df_full, df_withRV, df, prefix, folder_dir):
     # Get the unique weeks from the DataFrame index
     iso_calendar = df_full.index.isocalendar()
     all_weeks = list(set(zip(iso_calendar.year, iso_calendar.week)))
@@ -252,7 +255,110 @@ def add_enthalpy_calcualations(df, folder_dir, year, prefix=''):
                 df_1hr_newheaders_week.drop(columns=[('AV10', 'Q_fabrikant', 'W')], inplace=True)
             save_and_convert(df_1hr_newheaders_withRV_week, weekPrefixRV, weekFolder)
             save_and_convert(df_1hr_newheaders_week, weekPrefix, weekFolder)
+    return weeks_with_year
+
+
+def process_minute_data(df, folder_dir, prefix=''):
+    sEnthalpyTable = 'EnthalpyInput/EnthalpyTable.xlsx'    
+    df_Ggas = load_enthalpy_table(sEnthalpyTable)
+    interp_func, temperatures, pressures = create_interpolation_function(df_Ggas)
+    
+    df_withRV = df.copy()
+    
+    df_withRV, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten = perform_calculations(df_Ggas, df_withRV, interp_func, temperatures, pressures)
+    
+    df_full = add_additional_columns(df_withRV, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten)
+    
+    weeks_with_year = process_all_weeks(df_full, df_withRV, df, prefix, folder_dir)
 
             # fullweekPrefix = weekPrefix + 'full - '
             # save_and_convert(df_full_week, fullweekPrefix, weekFolder)
     return df_full, weeks_with_year
+
+def create_hourly_df_with_RV(df_1min_full, df_1hr_newheaders):
+    """
+    Create a new 1-hour dataframe from 1-minute data,
+    averaging RV columns and preserving the rest from 1hr dataframe where needed.
+    Applies conditional NaN to specific RV values based on hourly-averaged data.
+    """
+
+    # Identify RV columns to average
+    RV_columns = [col for col in df_1min_full.columns if col[0].startswith('RV')]
+
+    # Resample RV columns with mean
+    df_RV_hourly = df_1min_full[RV_columns].resample('h').mean()
+
+    # Copy existing 1hr dataframe for non-RV columns (including Pe_WP_kW)
+    df_nonRV_hourly = df_1hr_newheaders.copy()
+
+    # Combine both RV and non-RV parts assuming index alignment is okay
+    df_hourly_full = pd.concat([df_nonRV_hourly, df_RV_hourly], axis=1)
+
+    # Reorder columns to match original structure
+    ordered_columns = [col for col in df_1min_full.columns if col in df_hourly_full.columns]
+    df_hourly_full = df_hourly_full[ordered_columns]
+
+    # Calculate Q_brgas based on hourly-averaged V_gas_br
+    df_hourly_full[('RV10', 'Q_brgas', 'kJ/s')] = ((df_hourly_full[('MV15', 'V_gas_br', 'l/h')] / 1000) * 35.17) / 3.6
+
+    # Define valid condition
+    valid_condition = (
+        (df_hourly_full[('MV15', 'V_gas_br', 'l/h')] != 0) &
+        (df_hourly_full[('MV28', 'Tw_OV_uit', '°C')] >= df_hourly_full[('MV29', 'Tw_OV_in', '°C')])
+    )
+
+    # Set RV values to NaN where condition is not met
+    df_hourly_full.loc[~valid_condition, ('RV10', 'Q_brgas', 'kJ/s')] = np.nan
+    df_hourly_full.loc[~valid_condition, ('RV11', 'Q_ket1', 'kJ/s')] = np.nan
+
+    # Compute Rend_ket [%]
+    df_hourly_full[('RV16', 'Rend_ket', '%')] = (
+        df_hourly_full[('RV11', 'Q_ket1', 'kJ/s')]
+        .div(df_hourly_full[('RV10', 'Q_brgas', 'kJ/s')].where(df_hourly_full[('RV10', 'Q_brgas', 'kJ/s')] != 0, np.nan))
+        * 100
+    )
+
+    # Compute Q_afgeg and Q_opgen using Pe_WP_kW already in df_hourly_full (in kW)
+    Q_afgeg = (
+        df_hourly_full[('RV11', 'Q_ket1', 'kJ/s')]
+        .add(df_hourly_full[('RV14', 'Q_WP', 'kJ/s')], fill_value=0)
+    )
+
+    # Pe_WP_kW already in dataframe
+    Pe_WP_kW = df_hourly_full[('MV16', 'Pe_WP', 'W')] / 1000
+
+    # Compute Q_opgen — treating NaN as 0
+    Q_opgen = (
+        df_hourly_full[('RV10', 'Q_brgas', 'kJ/s')]
+        .add(Pe_WP_kW, fill_value=0)
+    )
+
+    # Compute Rend_waterz [%]
+    df_hourly_full[('RV18', 'Rend_waterz', '%')] = Q_afgeg.div(
+        Q_opgen.where(Q_opgen != 0, np.nan)
+    ) * 100
+
+    # Compute Q_straten
+    Q_straten = (
+        df_hourly_full[('RV5', 'Q_str1', 'kJ/s')]
+        .add(df_hourly_full[('RV9', 'Q_str2', 'kJ/s')], fill_value=0)
+    )
+
+    # Compute Rend_tot [%]
+    df_hourly_full[('RV19', 'Rend_tot', '%')] = Q_straten.div(
+        Q_opgen.where(Q_opgen != 0, np.nan)
+    ) * 100
+
+    return df_hourly_full
+
+
+def process_hour_data(df_1min_full, df_1hr_newheaders, folder_dir, prefix=''):
+
+    df = df_1hr_newheaders.copy()
+    df_hourly_full = create_hourly_df_with_RV(df_1min_full, df_1hr_newheaders)
+    df_full = df_hourly_full.copy()
+    df_withRV = df_hourly_full.copy()
+    
+    weeks_with_year = process_all_weeks(df_full, df_withRV, df, prefix, folder_dir)
+
+    return df_hourly_full, weeks_with_year
