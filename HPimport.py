@@ -67,12 +67,12 @@ else:
     # sDateStart = '2024-11-24'
     # sDateEnd = '2026-11-25'
 
-    sDateStart = '2022-11-24'
-    sDateEnd = '2024-11-25'
+    # sDateStart = '2022-11-24'
+    # sDateEnd = '2024-11-25'
 
 
-    # sDateStart = '2025-03-23'
-    # sDateEnd = '2025-04-01'
+    sDateStart = '2025-02-09'
+    sDateEnd = '2025-02-24'
 
 
 # Some global constants
