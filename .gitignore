@@ -26,10 +26,11 @@ AutomaticReportMaking/Output/
 AutomaticReportMaking/TemporaryStoredFiles/
 EVHI Data Cubulus/
 saveTemporaryPickles/
-Automatic excel calculations/Input/
 Automatic excel calculations/Output/
 Automatic excel calculations/TemporaryStoredFiles/
-
+Automatic excel calculations/Input/*
+!Automatic excel calculations/Input/Template document.docx
+!Automatic excel calculations/Input/Uitwerk light uurbasis zonder koeler RM-new.xlsm
 
 # Ignore larger files
 *.pickle

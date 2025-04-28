@@ -7,6 +7,7 @@ import time
 from datetime import datetime
 import pandas as pd
 import numpy as np
+import win32clipboard
 
 # Get the current working directory
 cwd = os.getcwd()
@@ -51,6 +52,21 @@ def write_to_excel(df, ws_name, wb):
         for col_idx, value in enumerate(row, start=1):
             ws.Cells(row_idx, col_idx).Value = value
 
+def wait_for_clipboard(timeout=10):
+    import win32clipboard
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            win32clipboard.OpenClipboard()
+            if win32clipboard.IsClipboardFormatAvailable(2):  # CF_BITMAP
+                win32clipboard.CloseClipboard()
+                return True
+            win32clipboard.CloseClipboard()
+        except:
+            pass
+        time.sleep(0.5)
+    raise Exception("Clipboard content not available within timeout.")
+
 def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_used, pWord, retry_count=1):
     # filepath_datadir = cwd + '/ExcelCalculations/Regulier/Uurwaarden/1hour - RV - weekno - 36Energy Balance - 02-09-2024 - 08-09-2024.xlsx'
     excel_filename = 'Uitwerk light uurbasis zonder koeler RM-new.xlsm'
@@ -90,8 +106,8 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
         parent_dir = os.path.dirname(filepath_datadir)
         files_in_folder = get_all_files(parent_dir)
         
-        file_sum_week = [f for f in files_in_folder if 'Weekly' in f]
-        file_sum_day = [f for f in files_in_folder if 'Daily' in f]
+        file_sum_week = [f for f in files_in_folder if 'Weekly' in f and '1hour' in f]
+        file_sum_day = [f for f in files_in_folder if 'Daily' in f and '1hour' in f]
         # Check if there is precisely one file in file_sum_week
         if len(file_sum_week) == 1:
             # Load the file into a DataFrame
@@ -153,13 +169,13 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
                 time.sleep(10)
 
                 try:
-                    ws_sum_day = wb.Worksheets('Sum_minutes_day')
+                    ws_sum_day = wb.Worksheets('Sum_day')
                 except Exception:
                     ws_sum_day = wb.Worksheets.Add()
-                    ws_sum_day.Name = 'Sum_minutes_day'
+                    ws_sum_day.Name = 'Sum_day'
 
-                write_to_excel(df_daily_sum, 'Sum_minutes_day', wb)
-                write_to_excel(df_weekly_sum, 'Sum_minutes_week', wb)
+                write_to_excel(df_daily_sum, 'Sum_day', wb)
+                write_to_excel(df_weekly_sum, 'Sum_week', wb)
 
                 wb.Application.ScreenUpdating = True
                 xlApp.Visible = True
@@ -233,8 +249,11 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
                 lstCharts = ["Chart1", "Chart2", "Chart3"]
                 for sChartName in lstCharts:
                     wb.Charts(sChartName).ChartArea.Copy()
+                    wait_for_clipboard()
                     wApp.Selection.PasteSpecial(IconIndex=0, Link=False, Placement=0, DisplayAsIcon=False, DataType=9)
+                    time.sleep(3)
                     wApp.Selection.TypeParagraph()
+                    time.sleep(3)
 
                 # Get the directory name
                 directory_name_excel = os.path.dirname(filepath_datadir)

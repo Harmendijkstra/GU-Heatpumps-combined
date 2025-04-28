@@ -44,9 +44,9 @@ def get_decimal_places_mapping(input_data, input_type='dict', is_hourly=False):
     def process_item(mv_key, dimension, key):
         if dimension in ['m3/h', 'kWh', 'bara', 'm3(n)/h', 'kJ/kg', 'kg/h', 'kJ/s', 'kJ/s']:
             decimal_places[mv_key] = 3
-        elif dimension in ['\u00b0C', 'hPa']:
+        elif dimension in ['\u00b0C', 'hPa', '-']:
             decimal_places[mv_key] = 2
-        elif dimension in ['%', 'kW', 'l/h', 'W']:
+        elif dimension in ['%', 'kW', 'l/h', 'W', '%-BW', 'K']:
             decimal_places[mv_key] = 0
         elif dimension == '-':
             # Skip adding to decimal_places mapping

@@ -22,7 +22,6 @@ import shutil
 import sys
 import fitz  # PyMuPDF
 
-
 sys.path.append('Automatic excel calculations/')
 sys.path.append('knmi/')
 from automatic_excel_proccssing import create_word_documents
@@ -35,7 +34,7 @@ bReadData = True
 bWriteExcel = True
 bDebugStopExecutionHere = False # This is used before to run seperate file for the stress test of the script in between
 bReadPickles = False # This is used to read the pickles from the previous run, good for debugging, but not for normal use. It will than use var_names to read the pickles
-bRunPreviousWeek = False # This variable needs to be True if the script is runned automatically, to get the previous week data 
+bRunPreviousWeek = True # This variable needs to be True if the script is runned automatically, to get the previous week data 
 bReportWord = True # This is used for reporting. For automated reporting, set to True.
 
 # If bReadPickles is True, the following variables will be read from the pickles
@@ -64,10 +63,16 @@ if bRunPreviousWeek:
     sDateEnd = lastweekday.strftime('%Y-%m-%d')
 else:
     # Below is the option to set the date range manually
-    # sDateStart = '2024-08-01'
-    sDateStart = '2022-03-23'
-    # sDateEnd = '2025-12-31' #inclusive
+
+    # sDateStart = '2024-11-24'
+    # sDateEnd = '2026-11-25'
+
+    sDateStart = '2022-11-24'
     sDateEnd = '2024-11-25'
+
+
+    # sDateStart = '2025-03-23'
+    # sDateEnd = '2025-04-01'
 
 
 # Some global constants
@@ -1019,25 +1024,26 @@ if __name__ == "__main__":
 
     
     if bReadPickles: 
-        # Note that the function convert_excel_output sometimes results in errors.
-        # This happens when a keyboard or mouse click is interrupting the process when excel is opened by the code.
-        # Therefore the results are stored and can be read from pickles, but this is overwritten everytime.
-        # Thefore make sure you have just runned the code with the correct settings before reading the pickles.
-        variables = read_variables(var_names)
-        # change_files = variables['change_files']
-        df_1hr_newheaders = variables['df_1hr_newheaders']
-        sMeetsetFolder = variables['sMeetsetFolder']
-        df_1min_newheaders = variables['df_1min_newheaders']
-        outliers_count = variables['outliers_count']
-        # convert_excel_output(pBase, change_files)
+        raise ValueError("Read pickles is set to True, but this is deprecated. Please set it to False.")
+        # # Note that the function convert_excel_output sometimes results in errors.
+        # # This happens when a keyboard or mouse click is interrupting the process when excel is opened by the code.
+        # # Therefore the results are stored and can be read from pickles, but this is overwritten everytime.
+        # # Thefore make sure you have just runned the code with the correct settings before reading the pickles.
+        # variables = read_variables(var_names)
+        # # change_files = variables['change_files']
+        # df_1hr_newheaders = variables['df_1hr_newheaders']
+        # sMeetsetFolder = variables['sMeetsetFolder']
+        # df_1min_newheaders = variables['df_1min_newheaders']
+        # outliers_count = variables['outliers_count']
+        # # convert_excel_output(pBase, change_files)
         
-        prefix = '1hour - RV - '
-        weeks_with_year = add_enthalpy_calcualations(df_1hr_newheaders, pRVMeetFolder, year, prefix=prefix)
-        prefix = '1min - RV - '
-        # weeks_with_year = add_enthalpy_calcualations(df_1min_newheaders, pRVMeetFolder, year, prefix=prefix)
-        copy_output_to_automaticreporting(weeks_with_year)
-        knmi_data_used = False
-        create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_used, pWord)
+        # prefix = '1hour - RV - '
+        # weeks_with_year = add_enthalpy_calcualations(df_1hr_newheaders, pRVMeetFolder, year, prefix=prefix)
+        # prefix = '1min - RV - '
+        # # weeks_with_year = add_enthalpy_calcualations(df_1min_newheaders, pRVMeetFolder, year, prefix=prefix)
+        # copy_output_to_automaticreporting(weeks_with_year)
+        # knmi_data_used = False
+        # create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_used, pWord)
 
     else:
         

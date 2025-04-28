@@ -81,77 +81,64 @@ def perform_calculations(df_Ggas, df, interp_func, temperatures, pressures):
             print(f"Warning: different values at temperature {temperature} and pressure {pressure}: library={library_value}, own_function={own_function_value}")
         
         return library_value
-    
-    df[('RV1', 'h_gas_in', 'kJ/kg')] = df.apply(
+
+    df[('RV1', 'm_gas_str1', 'kg/h')] = df[('MV6','V_gas_str1', 'm3(n)/h')] *  0.8334
+    df[('RV2', 'm_gas_str2', 'kg/h')] = df[('MV9', 'V_gas_str2', 'm3(n)/h')] *  0.8334
+    df[('RV3', 'm_gas_tot', 'kg/h')] = df[('RV1', 'm_gas_str1', 'kg/h')].add(df[('RV2', 'm_gas_str2', 'kg/h')])
+    df[('RV4', 'h_gas_in', 'kJ/kg')] = df.apply(
         lambda row: calculate_and_compare(row, ('MV5', 'T_gas_in', '\u00b0C'), ('MV4', 'p_gas_in', 'bara')),
         axis=1
     )
-    
-    df[('RV2', 'h_uit_str1', 'kJ/kg')] = df.apply(
+    df[('RV5', 'h_uit_str1', 'kJ/kg')] = df.apply(
         lambda row: calculate_and_compare(row, ('MV8', 'T_uit_str1', '\u00b0C'), ('MV7', 'p_uit_str1', 'bara')),
         axis=1
     )
-    
-    df[('RV3', 'm_gas_str1', 'kg/h')] = df[('MV6','V_gas_str1', 'm3(n)/h')] *  0.8334
-    df[('RV4', 'dh_str1', 'kJ/kg')] = (df[('RV2', 'h_uit_str1', 'kJ/kg')].sub(df[('RV1', 'h_gas_in', 'kJ/kg')])).clip(lower=0)
-    df[('RV5', 'Q_str1', 'kJ/s')] =  df[('RV3', 'm_gas_str1', 'kg/h')].mul(df[('RV4', 'dh_str1', 'kJ/kg')]) / 3600
-    df[('RV6', 'm_gas_str2', 'kg/h')] = df[('MV9', 'V_gas_str2', 'm3(n)/h')] *  0.8334
-
-    df[('RV7', 'h_uit_str2', 'kJ/kg')] = df.apply(
+    df[('RV6', 'h_uit_str2', 'kJ/kg')] = df.apply(
         lambda row: calculate_and_compare(row, ('MV11', 'T_uit_str2', '\u00b0C'), ('MV10', 'p_uit_str2', 'bara')),
         axis=1
     )
+    df[('RV7', 'dh_str1', 'kJ/kg')] = (df[('RV5', 'h_uit_str1', 'kJ/kg')].sub(df[('RV4', 'h_gas_in', 'kJ/kg')])).clip(lower=0)
+    df[('RV8', 'dh_str2', 'kJ/kg')] = (df[('RV6', 'h_uit_str2', 'kJ/kg')].sub(df[('RV4', 'h_gas_in', 'kJ/kg')])).clip(lower=0)
+    df[('RV9', 'Q_str1', 'kJ/s')] =  df[('RV1', 'm_gas_str1', 'kg/h')].mul(df[('RV7', 'dh_str1', 'kJ/kg')]) / 3600
+    df[('RV10', 'Q_str2', 'kJ/s')] = df[('RV2', 'm_gas_str2', 'kg/h')].mul(df[('RV8', 'dh_str2', 'kJ/kg')]) / 3600
+    df[('RV11', 'Q_brgas', 'kJ/s')] = ((df[('MV15', 'V_gas_br', 'l/h')] / 1000) * 35.17) / 3.6
 
-    df[('RV8', 'dh_str2', 'kJ/kg')] = (df[('RV7', 'h_uit_str2', 'kJ/kg')].sub(df[('RV1', 'h_gas_in', 'kJ/kg')])).clip(lower=0)
-    df[('RV9', 'Q_str2', 'kJ/s')] = df[('RV6', 'm_gas_str2', 'kg/h')].mul(df[('RV8', 'dh_str2', 'kJ/kg')]) / 3600
+
     dT_ketelw = df[('MV28', 'Tw_OV_uit', '\u00b0C')].sub(df[('MV29', 'Tw_OV_in', '\u00b0C')])
-    # valid_condition = ((df[('MV15', 'V_gas_br', 'l/h')] != 0) & (df[('MV28', 'Tw_OV_uit', '°C')] >= df[('MV29', 'Tw_OV_in', '°C')])) This should be done on hourly basis not minute basis as V_gas_br is not that precise 
-    # dT_ketelw = df[('MV23', 'Tw_ket1_uit', '\u00b0C')].sub(df[('MV22', 'Tw_ket1_in', '\u00b0C')])
-    # df[('RV11', 'Q_ket1', 'kJ/s')] = (df[('MV17', 'Vw_ket_1', 'l/h')] * 4.19 * (dT_ketelw)) / 3600
-    # df[('RV10', 'Q_brgas', 'kJ/s')] = np.where(
-    #     valid_condition,
-    #     ((df[('MV15', 'V_gas_br', 'l/h')] / 1000) * 35.17) / 3.6 * 60,
-    #     np.nan
-    # )
-
-    # df[('RV11', 'Q_ket1', 'kJ/s')] = np.where(
-    #     valid_condition,
-    #     (df[('MV20', 'Vw_ex_OV', 'l/h')] * 4.19 * (dT_ketelw)) / 3600, #Note that this is changed, using the OV instead of the ketel
-    #     np.nan
-    # )
-
-    df[('RV10', 'Q_brgas', 'kJ/s')] = ((df[('MV15', 'V_gas_br', 'l/h')] / 1000) * 35.17) / 3.6 * 60
-    df[('RV11', 'Q_ket1', 'kJ/s')] = (df[('MV20', 'Vw_ex_OV', 'l/h')] * 4.19 * (dT_ketelw)) / 3600 #Note that this is changed, using the OV instead of the ketel
-
+    df[('RV12', 'dT_ketelw', 'K')] = dT_ketelw
+    df[('RV13', 'Q_ket1', 'kJ/s')] = (df[('MV20', 'Vw_ex_OV', 'l/h')] * 4.19 * (dT_ketelw)) / 3600 #Note that this is changed, using the OV instead of the ketel
     dT_WP = df[('MV35', 'T_WP_uit', '\u00b0C')].sub(df[('MV34', 'T_WP_in', '\u00b0C')])
-    df[('RV14', 'Q_WP', 'kJ/s')] = (df[('MV21', 'Vw_WP', 'l/h')] * 4.19 * (dT_WP)) / 3600
-    
+    df[('RV14', 'dT_WP', 'K')] = dT_WP
+    df[('RV15', 'Q_WP', 'kJ/s')] = (df[('MV21', 'Vw_WP', 'l/h')] * 4.19 * (dT_WP)) / 3600
+    dT_OV = df[('MV28', 'Tw_OV_uit', '\u00b0C')].sub(df[('MV29', 'Tw_OV_in', '\u00b0C')])
+    df[('RV16', 'dT_OV', 'K')] = dT_OV
+    df[('RV17', 'Q_OV', 'kJ/s')] = (df[('MV20', 'Vw_ex_OV', 'l/h')] * 4.19 * (dT_OV)) / 3600 #Note that this is changed, using the OV instead of the ketel
+
     # dT_koeler = df[('MV38', 'Tw_klep_uit', '\u00b0C')].sub(df[('MV37', 'Tw_klep_in', '\u00b0C')])
-    # df[('RV15', 'Q_koeler', 'kJ/s')] = (df[('MV36', 'Vw_klep', 'l/h')] * 4.19 * (dT_koeler)) / 3600
+    # df[('...', 'Q_koeler', 'kJ/s')] = (df[('MV36', 'Vw_klep', 'l/h')] * 4.19 * (dT_koeler)) / 3600
     dT_koeler = 0  # We no longer use this, but this is still here such that the same code can be used if above is no longer commented
-    df[('RV16', 'Rend_ket', '%')] = (df[('RV11', 'Q_ket1', 'kJ/s')]).div(df[('RV10', 'Q_brgas', 'kJ/s')].where(df[('RV10', 'Q_brgas', 'kJ/s')] != 0, np.nan)) * 100
+    df[('RV18', 'ketelrend', '%-BW')] = (df[('RV13', 'Q_ket1', 'kJ/s')]).div(df[('RV11', 'Q_brgas', 'kJ/s')].where(df[('RV11', 'Q_brgas', 'kJ/s')] != 0, np.nan)) * 100
     
     Pe_WP_kW = df[('MV16', 'Pe_WP', 'W')]/1000
-    df[('RV17', 'Rend_WP', '%')] = df[('RV14', 'Q_WP', 'kJ/s')].div(Pe_WP_kW.where(Pe_WP_kW != 0, np.nan)) * 100
+    rend_WP = df[('RV15', 'Q_WP', 'kJ/s')].div(Pe_WP_kW.where(Pe_WP_kW != 0, np.nan))
     
-    Q_afgeg = df[('RV11', 'Q_ket1', 'kJ/s')].add(df[('RV14', 'Q_WP', 'kJ/s')])
-    Q_opgen = df[('RV10', 'Q_brgas', 'kJ/s')].add(Pe_WP_kW)
-    df[('RV18', 'Rend_waterz', '%')] = Q_afgeg.div(Q_opgen.where(Q_opgen != 0, np.nan)) * 100
-    
-    # Q_straten = df[('RV5', 'Q_str1', 'kJ/s')].add(df[('RV9', 'Q_str2', 'kJ/s')]).add(df[('RV15', 'Q_koeler', 'kJ/s')])
-    Q_straten = df[('RV5', 'Q_str1', 'kJ/s')].add(df[('RV9', 'Q_str2', 'kJ/s')])
-    df[('RV19', 'Rend_tot', '%')] = Q_straten.div(Q_opgen.where(Q_opgen != 0, np.nan)) * 100
+    Q_afgeg = df[('RV13', 'Q_ket1', 'kJ/s')].add(df[('RV15', 'Q_WP', 'kJ/s')])
+    Q_opgen = df[('RV11', 'Q_brgas', 'kJ/s')].add(Pe_WP_kW)
+    df[('RV19', 'COP_WP', '-')] = rend_WP
+    df[('RV20', 'WZ_rend', '%-BW')] = Q_afgeg.div(Q_opgen.where(Q_opgen != 0, np.nan)) * 100
+
+    # Q_straten = df[('RV9', 'Q_str1', 'kJ/s')].add(df[('RV10', 'Q_str2', 'kJ/s')]).add(df[('...', 'Q_koeler', 'kJ/s')])
+    Q_straten = df[('RV9', 'Q_str1', 'kJ/s')].add(df[('RV10', 'Q_str2', 'kJ/s')])
+    df[('RV21', 'totrend', '%-BW')] = Q_straten.div(Q_opgen.where(Q_opgen != 0, np.nan)) * 100
     return df, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten
 
 def add_additional_columns(df, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten):
     df_full = df.copy()
-    df_full[('RV11a', 'dT_ketelw', '')] = dT_ketelw
-    df_full[('RV14a', 'dT_WP', '')] = dT_WP
-    # df_full[('RV15a', 'dT_koeler', '')] = dT_koeler
-    df_full[('RV16a', 'Pe_WP_kW', '')] = Pe_WP_kW
-    df_full[('RV18a', 'Q_afgeg', '')] = Q_afgeg
-    df_full[('RV18b', 'Q_opgen', '')] = Q_opgen
-    df_full[('RV19a', 'Q_straten', '')] = Q_straten
+    # # df_full[('RV15a', 'dT_koeler', '')] = dT_koeler
+    # df_full[('RV22', 'Pe_WP_kW', '')] = Pe_WP_kW
+    # df_full[('RV23', 'Q_afgeg', '')] = Q_afgeg
+    # df_full[('RV24', 'Q_opgen', '')] = Q_opgen
+    # df_full[('RV25', 'Q_straten', '')] = Q_straten
     return df_full
 
 def save_and_convert(df, prefix, weekFolder):
@@ -201,7 +188,7 @@ def process_all_weeks(df_full, df_withRV, df, prefix, folder_dir):
             weekPrefixRV = f"{prefix}weekno - {iso_week}"
             weekPrefix = f"{prefix.replace('RV - ', '')}weekno - {iso_week}"
             
-            if prefix.startswith('1min'):
+            if prefix.startswith('1hour'):
                 # Sum the dataframe per day, excluding 'Datum' and 'Tijd' columns
                 df_daily_sum = df_1hr_newheaders_withRV_week.resample('D').sum()
                 # Sum the entire dataframe, excluding 'Datum' and 'Tijd' columns
@@ -299,7 +286,7 @@ def create_hourly_df_with_RV(df_1min_full, df_1hr_newheaders):
     df_hourly_full = df_hourly_full[ordered_columns]
 
     # Calculate Q_brgas based on hourly-averaged V_gas_br
-    df_hourly_full[('RV10', 'Q_brgas', 'kJ/s')] = ((df_hourly_full[('MV15', 'V_gas_br', 'l/h')] / 1000) * 35.17) / 3.6
+    df_hourly_full[('RV11', 'Q_brgas', 'kJ/s')] = ((df_hourly_full[('MV15', 'V_gas_br', 'l/h')] / 1000) * 35.17) / 3.6
 
     # Define valid condition
     valid_condition = (
@@ -308,20 +295,20 @@ def create_hourly_df_with_RV(df_1min_full, df_1hr_newheaders):
     )
 
     # Set RV values to NaN where condition is not met
-    df_hourly_full.loc[~valid_condition, ('RV10', 'Q_brgas', 'kJ/s')] = np.nan
-    df_hourly_full.loc[~valid_condition, ('RV11', 'Q_ket1', 'kJ/s')] = np.nan
+    df_hourly_full.loc[~valid_condition, ('RV11', 'Q_brgas', 'kJ/s')] = np.nan
+    df_hourly_full.loc[~valid_condition, ('RV17', 'Q_OV', 'kJ/s')] = np.nan
 
     # Compute Rend_ket [%]
-    df_hourly_full[('RV16', 'Rend_ket', '%')] = (
-        df_hourly_full[('RV11', 'Q_ket1', 'kJ/s')]
-        .div(df_hourly_full[('RV10', 'Q_brgas', 'kJ/s')].where(df_hourly_full[('RV10', 'Q_brgas', 'kJ/s')] != 0, np.nan))
+    df_hourly_full[('RV18', 'ketelrend', '%-BW')] = (
+        df_hourly_full[('RV17', 'Q_OV', 'kJ/s')]
+        .div(df_hourly_full[('RV11', 'Q_brgas', 'kJ/s')].where(df_hourly_full[('RV11', 'Q_brgas', 'kJ/s')] != 0, np.nan))
         * 100
     )
 
     # Compute Q_afgeg and Q_opgen using Pe_WP_kW already in df_hourly_full (in kW)
     Q_afgeg = (
-        df_hourly_full[('RV11', 'Q_ket1', 'kJ/s')]
-        .add(df_hourly_full[('RV14', 'Q_WP', 'kJ/s')], fill_value=0)
+        df_hourly_full[('RV17', 'Q_OV', 'kJ/s')]
+        .add(df_hourly_full[('RV15', 'Q_WP', 'kJ/s')], fill_value=0)
     )
 
     # Pe_WP_kW already in dataframe
@@ -329,23 +316,23 @@ def create_hourly_df_with_RV(df_1min_full, df_1hr_newheaders):
 
     # Compute Q_opgen — treating NaN as 0
     Q_opgen = (
-        df_hourly_full[('RV10', 'Q_brgas', 'kJ/s')]
+        df_hourly_full[('RV11', 'Q_brgas', 'kJ/s')]
         .add(Pe_WP_kW, fill_value=0)
     )
 
-    # Compute Rend_waterz [%]
-    df_hourly_full[('RV18', 'Rend_waterz', '%')] = Q_afgeg.div(
+    # Compute WZ_rend [%]
+    df_hourly_full[('RV20', 'WZ_rend', '%-BW')] = Q_afgeg.div(
         Q_opgen.where(Q_opgen != 0, np.nan)
     ) * 100
 
     # Compute Q_straten
     Q_straten = (
-        df_hourly_full[('RV5', 'Q_str1', 'kJ/s')]
-        .add(df_hourly_full[('RV9', 'Q_str2', 'kJ/s')], fill_value=0)
+        df_hourly_full[('RV9', 'Q_str1', 'kJ/s')]
+        .add(df_hourly_full[('RV10', 'Q_str2', 'kJ/s')], fill_value=0)
     )
 
-    # Compute Rend_tot [%]
-    df_hourly_full[('RV19', 'Rend_tot', '%')] = Q_straten.div(
+    # Compute totrend [%]
+    df_hourly_full[('RV21', 'totrend', '%-BW')] = Q_straten.div(
         Q_opgen.where(Q_opgen != 0, np.nan)
     ) * 100
 
