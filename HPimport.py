@@ -26,7 +26,6 @@ sys.path.append('Automatic excel calculations/')
 sys.path.append('knmi/')
 from automatic_excel_proccssing import create_word_documents
 from knmi import get_hour_data_dataframe
-station_deelen = 275
 
 
 # Specify global variables
@@ -54,6 +53,16 @@ else:
     sMeetsetFolder = 'Meetset1-Deventer'
     location = 'Deventer' # Used for Automatic excel calculations within Word documents
 
+# Set the knmi station closest to the location
+if location == 'Deventer':
+    knmi_station = 275 # Station Deelen, 25 km from Deventer
+elif location == 'Nunspeet':
+    knmi_station = 8 # Station Lelystad, 20 km from Nunspeet
+elif location == 'Wijhe':
+    knmi_station = 278 # Station Heino, 10 km from Wijhe 
+else:
+    raise ValueError(f"Unknown location '{location}'. Please set knmi_station accordingly.")
+
 if bRunPreviousWeek:
     time_now = datetime.now()
     weekno = time_now.isocalendar()[1]
@@ -71,8 +80,8 @@ else:
     # sDateEnd = '2024-11-25'
 
 
-    sDateStart = '2025-02-09'
-    sDateEnd = '2025-02-24'
+    sDateStart = '2025-06-01'
+    sDateEnd = '2025-08-24'
 
 
 # Some global constants
@@ -1071,7 +1080,7 @@ if __name__ == "__main__":
         ignore_columns = ['Contains missing data', 'Missing data (no Eastron02)', 
                         'Missing data (no Belimo)', 'Eastron Total Power']
         needed_columns = list(set(original_columns)- set(ignore_columns))
-        # Check that only existing columns remain
+        # Check that only existing columns remain 
         needed_columns = list(set(needed_columns).intersection(set(df.columns)))
         # Some columns are a lot of times NaN, include those
         ignore_eastron2_column = [col for col in needed_columns if col.startswith('Eastron02')]
@@ -1101,9 +1110,9 @@ if __name__ == "__main__":
         if 'Weather Abs Air Pressure' in df.columns:
             # Convert pgasin from barg to bara, but if air pressure is below minimum_atmospheric_pressure mbar, add atmospheric_pressure to the value instead of reading the air pressure
             df['PgasIn'] = np.where(
-                df['Weather Abs Air Pressure'].fillna(atmospheric_pressure) < minimum_atmospheric_pressure,
+                df['Weather Abs Air Pressure'].fillna(atmospheric_pressure*1000) < minimum_atmospheric_pressure,
                 atmospheric_pressure + df['PgasIn'],
-                df['Weather Abs Air Pressure'].fillna(atmospheric_pressure).div(1000) + df['PgasIn']
+                df['Weather Abs Air Pressure'].fillna(atmospheric_pressure*1000).div(1000) + df['PgasIn']
             )
         if 'Eastron01 Total Power' in df.columns and 'Eastron02 Total Power' in df.columns:
             df['Eastron Total Power'] = df[['Eastron01 Total Power', 'Eastron02 Total Power']].sum(axis=1)
@@ -1187,7 +1196,7 @@ if __name__ == "__main__":
         knmi_data_used = False
         start_time = (df_1hr.index[0] - timedelta(days=1)).strftime('%Y%m%d%H')
         end_time = (df_1hr.index[-1] + timedelta(days=1)).strftime('%Y%m%d%H')
-        df_knmi = get_hour_data_dataframe(stations=[station_deelen], start=start_time, end=end_time, variables=['T', 'P', 'U'])
+        df_knmi = get_hour_data_dataframe(stations=[knmi_station], start=start_time, end=end_time, variables=['T', 'P', 'U'])
 
         # Fill NaN values with KNMI data
         temp_air_filled = (df_knmi['T'] / 10).reindex(df_1hr.index)
