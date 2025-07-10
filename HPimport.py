@@ -1225,6 +1225,8 @@ if __name__ == "__main__":
 
                 # Replace the corresponding values in df_1min for the same hour
                 df_1min.loc[df_1min.index.floor('h') == hour, 'Weather Temp Air'] = temp_air_filled.at[hour]
+                df_1min.loc[df_1min.index.floor('h') == hour, 'Weather Abs Air Pressure'] = air_pres_filled.at[hour]
+                df_1min.loc[df_1min.index.floor('h') == hour, 'Weather Rel Humidity'] = rel_hum_filled.at[hour]
 
         # Calculate the number of NaN values after filling
         number_of_nan_values_after = df_1hr['Weather Temp Air'].isna().sum() + df_1hr['Weather Abs Air Pressure'].isna().sum() + df_1hr['Weather Rel Humidity'].isna().sum()
