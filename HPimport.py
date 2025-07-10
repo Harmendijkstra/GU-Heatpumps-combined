@@ -80,7 +80,7 @@ else:
     # sDateEnd = '2024-11-25'
 
 
-    sDateStart = '2025-06-01'
+    sDateStart = '2025-06-21'
     sDateEnd = '2025-08-24'
 
 
@@ -569,19 +569,17 @@ def process_totalizers(df, totalizer_dict):
         
     return df
 
-def convert_bits(row, columns, unpack_format='<d'):
+def convert_bits(timestamp, values, unpack_format='<d>', modbus_update=pd.Timestamp('2024-09-03 09:41:00')):
     """Function to convert non-NaN values in the specified columns into a single column."""  
-    int_list = [int(row[col]) for col in columns if not np.isnan(row[col])]
+    int_list = [int(v) for v in values if not np.isnan(v)]
     if unpack_format == '<d':
         if len(int_list) != 4:
-            return np.nan  # Ensure we have exactly 4 values to process
+            return np.nan # Ensure we have exactly 4 values to process
     elif unpack_format.endswith('I'):
         if len(int_list) != 2:
-            return np.nan  # Ensure we have exactly 2 values to process    
+            return np.nan # Ensure we have exactly 2 values to process    
 
-    modbus_update = datetime.strptime('2024-09-03 09:41:00', '%Y-%m-%d %H:%M:%S') #Modbus update from here on
-    # Change conversion after modbus update
-    if row['Timestamp'] > modbus_update:
+    if timestamp > modbus_update:
         byte_sequence = b''.join(struct.pack('>H', n) for n in int_list)
     else:
         # Pack each 16-bit integer into a 2-byte sequence
@@ -589,13 +587,11 @@ def convert_bits(row, columns, unpack_format='<d'):
         
     # Interpret the byte sequence based on the specified unpack format
     if unpack_format == '<d':  # Double-precision float
-        value = round(struct.unpack('<d', byte_sequence)[0], 3)
+        return round(struct.unpack('<d', byte_sequence)[0], 3)
     elif unpack_format.endswith('I'):  # 32-bit unsigned integer
-        value = struct.unpack(unpack_format, byte_sequence)[0]
+        return struct.unpack(unpack_format, byte_sequence)[0]
     else:
         raise ValueError(f"Unsupported unpack format: {unpack_format}")
-    
-    return value
 
 def convert_to_1_minute_data(df, totalizer_dict):
     """Convert 15-second data to 1-minute data."""
@@ -771,7 +767,7 @@ def interpolate_nans(df, nLimit=None):
     df.iloc[:nLimit, 3:] = df.iloc[:nLimit, 3:].bfill(axis=0)
     return df, dfMissing
 
-def calc_weithed_mean_flow(df_1min, col_wm_flow, col_flow, col_tempout, col_tempin):
+def calculate_heat_flow(df_1min, col_wm_flow, col_flow, col_tempout, col_tempin):
     df_1min = df_1min.copy()
     required_cols = [col_flow, col_tempout, col_tempin]
     if not all(col in df_1min.columns for col in required_cols):
@@ -954,30 +950,44 @@ def copy_output_to_automaticreporting(weeks_with_year):
                 shutil.copy2(src_file, dst_file)
 
 def combine_raw_columns(df):
-    # BACKUP columns for if Weather Air Temp value is off, 
-    # then reconstruct with a separate function from 03A+03B most likely
+    modbus_update = pd.Timestamp('2024-09-03 09:41:00') # From here on there was a modbus firmware update, changing endian for bit conversion
+    cutoff_date = pd.Timestamp('2025-06-23') # From here on, the modbus firware update is applied, from now on bit conversion is no longer needed
+
+    # Clean up redundant columns
     weatherAirTempCols = [col for col in df.columns if col.startswith('Weather Temp Air')]
     df.drop(weatherAirTempCols[1:], axis=1, inplace=True)
-    if 'Itron Gas volume 2' in df.columns:
-        df.drop(['Itron Gas volume 2','Itron Gas volume 3'], axis=1, inplace=True)
+    for col in ['Itron Gas volume 2', 'Itron Gas volume 3']:
+        if col in df.columns:
+            df.drop(col, axis=1, inplace=True)
 
-    process_stream_1p = ['Stream1 PressureA', 'Stream1 PressureB', 'Stream1 PressureC', 'Stream1 PressureD']
-    process_stream_1t = ['Stream1 TemperatureA', 'Stream1 TemperatureB', 'Stream1 TemperatureC', 'Stream1 TemperatureD']
-    process_stream_1f = ['Stream1 FlowA', 'Stream1 FlowB', 'Stream1 FlowC', 'Stream1 FlowD']
-    process_stream_2p = ['Stream2 PressureA', 'Stream2 PressureB', 'Stream2 PressureC', 'Stream2 PressureD']
-    process_stream_2t = ['Stream2 TemperatureA', 'Stream2 TemperatureB', 'Stream2 TemperatureC', 'Stream2 TemperatureD']
-    process_stream_2f = ['Stream2 FlowA', 'Stream2 FlowB', 'Stream2 FlowC', 'Stream2 FlowD']
-    
+    dictBitConversionEVHI = {
+        'Stream1 Pressure': ['Stream1 PressureA', 'Stream1 PressureB', 'Stream1 PressureC', 'Stream1 PressureD'],
+        'Stream1 Temperature': ['Stream1 TemperatureA', 'Stream1 TemperatureB', 'Stream1 TemperatureC', 'Stream1 TemperatureD'],
+        'Stream1 Flow': ['Stream1 FlowA', 'Stream1 FlowB', 'Stream1 FlowC', 'Stream1 FlowD'],
+        'Stream2 Pressure': ['Stream2 PressureA', 'Stream2 PressureB', 'Stream2 PressureC', 'Stream2 PressureD'],
+        'Stream2 Temperature': ['Stream2 TemperatureA', 'Stream2 TemperatureB', 'Stream2 TemperatureC', 'Stream2 TemperatureD'],
+        'Stream2 Flow': ['Stream2 FlowA', 'Stream2 FlowB', 'Stream2 FlowC', 'Stream2 FlowD'],
+    }
+
     print("Convert bits to values...")
-    # Apply the function to each row and create a new column with the results
-    dictBitConversionEVHI = {'Stream1 Pressure':process_stream_1p, 'Stream1 Temperature':process_stream_1t, 
-                            'Stream1 Flow':process_stream_1f, 'Stream2 Pressure':process_stream_2p, 
-                            'Stream2 Temperature':process_stream_2t,'Stream2 Flow':process_stream_2f}
-    for key,value in dictBitConversionEVHI.items():
-        if value[0] in df.columns:
-            df[key] = df.apply(lambda row: convert_bits(row, value, unpack_format='<d'), axis=1)
-            df.drop(value, axis=1, inplace=True)
+
+    for key, cols in dictBitConversionEVHI.items():
+        if cols[0] in df.columns:
+            mask = df['Timestamp'] < cutoff_date
+            timestamps = df.loc[mask, 'Timestamp'].to_numpy()
+            values_array = df.loc[mask, cols].to_numpy()
+
+            results = [
+                convert_bits(ts, vals, unpack_format='<d', modbus_update=modbus_update)
+                for ts, vals in zip(timestamps, values_array)
+            ]
+
+            df.loc[mask, key] = results
+            df.drop(cols, axis=1, inplace=True)
+
     return df
+
+
 
 def process_weather_temp_air(series):
     # Create a copy of the series to avoid modifying the original data
@@ -1178,9 +1188,9 @@ if __name__ == "__main__":
         df_1min, outliers_count, max_consecutive_count = remove_outliers(df_1min, df_minmax, lstHeaderMapping=hHP.makeAllHeaderMappings())
         
         # Add some columns with weighted mean flow rates
-        df_1min = calc_weithed_mean_flow(df_1min, col_wm_flow='Q_ket1_wm', col_flow='Belimo01 FlowRate', col_tempout='Belimo01 Temp2 internal', col_tempin='Belimo01 Temp1 external') #Note that we use for Q_ket in enthalpy calculations now OV, so that should be compared with Q_OV_wm instead of Q_ket1_wm!
-        df_1min = calc_weithed_mean_flow(df_1min, col_wm_flow='Q_OV_wm', col_flow='Belimo02 FlowRate', col_tempout='Belimo02 Temp2 internal', col_tempin='Belimo02 Temp1 external')
-        df_1min = calc_weithed_mean_flow(df_1min, col_wm_flow='Q_WP_wm', col_flow='Belimo03 FlowRate', col_tempout='Belimo03 Temp2 internal', col_tempin='Belimo03 Temp1 external')
+        df_1min = calculate_heat_flow(df_1min, col_wm_flow='Q_ket1_wm', col_flow='Belimo01 FlowRate', col_tempout='Belimo01 Temp2 internal', col_tempin='Belimo01 Temp1 external') #Note that we use for Q_ket in enthalpy calculations now OV, so that should be compared with Q_OV_wm instead of Q_ket1_wm!
+        df_1min = calculate_heat_flow(df_1min, col_wm_flow='Q_OV_wm', col_flow='Belimo02 FlowRate', col_tempout='Belimo02 Temp2 internal', col_tempin='Belimo02 Temp1 external')
+        df_1min = calculate_heat_flow(df_1min, col_wm_flow='Q_WP_wm', col_flow='Belimo03 FlowRate', col_tempout='Belimo03 Temp2 internal', col_tempin='Belimo03 Temp1 external')
 
         df_1hr = convert_to_1_hour_data(df_1min)
 
