@@ -191,7 +191,7 @@ message, email_message = check_nans(df_1hr_newheaders, ignore_columns)
 # Check max_consecutive_count
 max_consecutive_issues = {k: v for k, v in max_consecutive_count.items() if v > 1}
 # Construct the email content
-email_subject = "Heatpump Monitoring"
+email_subject = "Heatpump Monitoring, for location: " + location
 body = ""
 email_body = ""
 

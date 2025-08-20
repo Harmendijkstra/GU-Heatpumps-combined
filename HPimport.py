@@ -21,12 +21,13 @@ import pickle
 import shutil
 import sys
 import fitz  # PyMuPDF
+import re
 
 sys.path.append('Automatic excel calculations/')
 sys.path.append('knmi/')
 from automatic_excel_proccssing import create_word_documents
 from knmi import get_hour_data_dataframe
-
+from knmibodemtemp import get_soil_temp_full
 
 # Specify global variables
 bReadData = True
@@ -35,6 +36,7 @@ bDebugStopExecutionHere = False # This is used before to run seperate file for t
 bReadPickles = False # This is used to read the pickles from the previous run, good for debugging, but not for normal use. It will than use var_names to read the pickles
 bRunPreviousWeek = True # This variable needs to be True if the script is runned automatically, to get the previous week data 
 bReportWord = True # This is used for reporting. For automated reporting, set to True.
+KNMI_SOIL_CORRECTION = 0.65
 
 # If bReadPickles is True, the following variables will be read from the pickles
 # var_names = ['change_files', 'df_1hr_newheaders', 'sMeetsetFolder', 'df_1min_newheaders', 'outliers_count'] # Used to save and read variables from pickles
@@ -48,16 +50,16 @@ if len(sys.argv) > 2:
 else:
     # Else use the default values, that can be set here manually:
     # sMeetsetFolder = 'StresstestDeventer_08-12jul'
-    # sMeetsetFolder = 'Deventer_13-17jul'
-    # sMeetsetFolder = 'Meetset2-Nunspeet'
-    sMeetsetFolder = 'Meetset1-Deventer'
-    location = 'Deventer' # Used for Automatic excel calculations within Word documents
+    #sMeetsetFolder = 'Meetset3-Wijhe'
+    sMeetsetFolder = 'Meetset2-Nunspeet'
+    #sMeetsetFolder = 'Meetset1-Deventer'
+    location = 'Nunspeet' # Used for Automatic excel calculations within Word documents
 
 # Set the knmi station closest to the location
 if location == 'Deventer':
     knmi_station = 275 # Station Deelen, 25 km from Deventer
 elif location == 'Nunspeet':
-    knmi_station = 8 # Station Lelystad, 20 km from Nunspeet
+    knmi_station = 260 # Station de Bilt, 45 km from Nunspeet
 elif location == 'Wijhe':
     knmi_station = 278 # Station Heino, 10 km from Wijhe 
 else:
@@ -79,10 +81,8 @@ else:
     # sDateStart = '2022-11-24'
     # sDateEnd = '2024-11-25'
 
-
-    sDateStart = '2025-06-21'
-    sDateEnd = '2025-08-24'
-
+    sDateStart = '2025-06-22'
+    sDateEnd = '2026-05-19'
 
 # Some global constants
 minimum_WP_power = 500 # Minimum power in We to consider the WP to be running
@@ -106,6 +106,9 @@ TgasIn_min = -5.0
 TgasIn_max = 100.0
 PgasIn_min = -2.0
 PgasIn_max = 70.0
+
+if (bDebugStopExecutionHere) and (not location=='Deventer'):
+    raise Exception("Debug stop execution here, because bDebugStopExecutionHere is True and location is not Deventer. This is used to run the script in a separate file for stress testing for Deventer with some specific changes.")
 
 
 def save_variables(variables, folder='saveTemporaryPickles'):
@@ -1029,6 +1032,28 @@ def process_weather_temp_air(series):
 
     return series
 
+def name_highest_belimos(df):
+    pat = re.compile(r'^Belimo0*(\d+)\b')
+    belimo_cols = [c for c in df.columns if pat.search(c)]
+    nums = sorted({int(pat.search(c).group(1)) for c in belimo_cols})
+
+    if len(nums) < 2:
+        raise Exception("Not enough Belimos to find highest + 2nd highest.")
+    highest = nums[-1]
+    second_highest = nums[-2]
+
+    for c in belimo_cols:
+        m = pat.search(c)
+        n = int(m.group(1))
+        if n == highest:
+            new_name = pat.sub('Belimo-highest', c, count=1)
+            df[new_name] = df[c]
+        elif n == second_highest:
+            new_name = pat.sub('Belimo-2highest', c, count=1)
+            df[new_name] = df[c]
+
+    return df
+
 if __name__ == "__main__":
     # Set environment variables
     pBase = os.getcwd()
@@ -1106,6 +1131,18 @@ if __name__ == "__main__":
         print('Saving full dataframe...')
         df.set_index('Adjusted Timestamp', drop=False, inplace=True)
         
+        df_soil = get_soil_temp_full()
+        df_soil_indexed = df_soil.set_index('datetime')
+        df = df.copy()
+        df.loc[:, 'Soil temperature corrected'] = (
+            (df_soil_indexed['TB5'] + KNMI_SOIL_CORRECTION)
+            .reindex(df['Adjusted Timestamp'])
+            .interpolate(method='time')
+            .ffill()
+            .bfill()
+            .values
+        )
+
         # Save the data before correcting for outliers and interpolating missing values
         filename = 'Before_corrections ' + sMeetsetFolder + datetime.now().strftime('_%Y-%m-%d_%Hh%M.xlsx') + '.xlsx'
         df = check_monotonic_and_fill_gaps(df, freq='15s')
@@ -1117,13 +1154,20 @@ if __name__ == "__main__":
         
         df, dfMissing = interpolate_nans(df, nLimit=maximum_interpolate_nans)
         # First interpolate, then make sum of Eastron power. Otherwise, some interpolated values are missing in the sum.
+        start_time = (df.index[0] - timedelta(days=1)).strftime('%Y%m%d%H')
+        end_time = (df.index[-1] + timedelta(days=1)).strftime('%Y%m%d%H')
+        df_knmi = get_hour_data_dataframe(stations=[knmi_station], start=start_time, end=end_time, variables=['T', 'P', 'U'])
+        df_knmi['P_bar'] = df_knmi['P'] / 10000
+        p_atmospheric_interp = df_knmi['P_bar'].reindex(df.index).interpolate(method='time')
         if 'Weather Abs Air Pressure' in df.columns:
             # Convert pgasin from barg to bara, but if air pressure is below minimum_atmospheric_pressure mbar, add atmospheric_pressure to the value instead of reading the air pressure
             df['PgasIn'] = np.where(
-                df['Weather Abs Air Pressure'].fillna(atmospheric_pressure*1000) < minimum_atmospheric_pressure,
-                atmospheric_pressure + df['PgasIn'],
-                df['Weather Abs Air Pressure'].fillna(atmospheric_pressure*1000).div(1000) + df['PgasIn']
+                df['Weather Abs Air Pressure'].fillna(p_atmospheric_interp*1000) < minimum_atmospheric_pressure,
+                p_atmospheric_interp + df['PgasIn'],
+                df['Weather Abs Air Pressure'].fillna(p_atmospheric_interp*1000).div(1000) + df['PgasIn']
             )
+        else:
+            df['PgasIn'] = p_atmospheric_interp + df['PgasIn']
         if 'Eastron01 Total Power' in df.columns and 'Eastron02 Total Power' in df.columns:
             df['Eastron Total Power'] = df[['Eastron01 Total Power', 'Eastron02 Total Power']].sum(axis=1)
             rowsMaskNAN = df[['Eastron01 Total Power', 'Eastron02 Total Power']].isna().all(axis=1)
@@ -1131,20 +1175,21 @@ if __name__ == "__main__":
 
         # Check on outlier values:
         # TgasIn: Outliers for temperature and PgasIn: outliers for incoming pressure
+        # UPDATE, convert Soil temperature corrected for TgasIn
+        if location == 'Deventer':
+            df['TgasIn'] = df['Soil temperature corrected'] 
         rowsMask = df[~df['TgasIn'].between(TgasIn_min, TgasIn_max)].index
         df.loc[rowsMask, 'TgasIn'] = np.nan
         rowsMask = df[~df['PgasIn'].between(PgasIn_min, PgasIn_max)].index
         df.loc[rowsMask, 'PgasIn'] = np.nan
         
         # Handle totalizers, make them consistent and then use for 1min output.
-        dict_totalizer = {
-            'Itron Gas volume 1': ['Itron Gas volume 1'],
-            'Belimo01 FlowTotalL': ['Belimo01 FlowTotalL'],
-            'Belimo02 FlowTotalL': ['Belimo02 FlowTotalL'],
-            'Belimo03 FlowTotalL': ['Belimo03 FlowTotalL'],
-            'BelimoValve FlowTotalL': ['BelimoValve FlowTotalL'],
-            # Add 'Hager Total Energy' as well? Currently not used, and no errors..
-            }
+        # Fixed columns 
+        fixed_cols = ['Itron Gas volume 1']
+        # Dynamically find columns containing 'FlowTotalL'
+        flow_cols = [col for col in df.columns if 'FlowTotalL' in col]
+        # Build dict_totalizer
+        dict_totalizer = {col: [col] for col in fixed_cols + flow_cols}
         dict_totalizer = {k: dict_totalizer[k] for k in dict_totalizer if k in df.columns}
         colsTotalizer = [item for sublist in list(dict_totalizer.values()) for item in sublist]
         df = make_totalizers_monotonic(df, colsTotalizer)
@@ -1154,11 +1199,16 @@ if __name__ == "__main__":
         
         df.drop(dropIndices.unique(), axis=0, inplace=True)
 
+        #Create new columns for the highest and second highest Belimo columns
+        if not bDebugStopExecutionHere:
+            df = name_highest_belimos(df)
+
         # Now work on the 1min output for the energy balance calculation    
         df_1min = convert_to_1_minute_data(df, dict_totalizer)
         df_1min.set_index('Adjusted Timestamp', drop=False, inplace=True)
 
-        df_1min['Weather Temp Air'] = process_weather_temp_air(df_1min['Weather Temp Air'])
+        if 'Weather Temp Air' in df_1min.columns:
+            df_1min['Weather Temp Air'] = process_weather_temp_air(df_1min['Weather Temp Air'])
         if 'Itron Gas volume 1_diff' in df_1min.columns:
             # df_1min['Itron Gas volume 1_diff'] = df_1min['Itron Gas volume 1_diff']*60*1000 # Convert from m3/minute to l/h
             df_1min['Itron Gas volume 1_diff'] = df_1min['Itron Gas volume 1_diff']*1000 # Convert from m3/minute to l/h
@@ -1186,11 +1236,11 @@ if __name__ == "__main__":
         minmax_filepath = cmb(pBase, "minmax_cols.xlsx")
         df_minmax = pd.read_excel(minmax_filepath)
         df_1min, outliers_count, max_consecutive_count = remove_outliers(df_1min, df_minmax, lstHeaderMapping=hHP.makeAllHeaderMappings())
-        
+
         # Add some columns with weighted mean flow rates
         df_1min = calculate_heat_flow(df_1min, col_wm_flow='Q_ket1_wm', col_flow='Belimo01 FlowRate', col_tempout='Belimo01 Temp2 internal', col_tempin='Belimo01 Temp1 external') #Note that we use for Q_ket in enthalpy calculations now OV, so that should be compared with Q_OV_wm instead of Q_ket1_wm!
-        df_1min = calculate_heat_flow(df_1min, col_wm_flow='Q_OV_wm', col_flow='Belimo02 FlowRate', col_tempout='Belimo02 Temp2 internal', col_tempin='Belimo02 Temp1 external')
-        df_1min = calculate_heat_flow(df_1min, col_wm_flow='Q_WP_wm', col_flow='Belimo03 FlowRate', col_tempout='Belimo03 Temp2 internal', col_tempin='Belimo03 Temp1 external')
+        df_1min = calculate_heat_flow(df_1min, col_wm_flow='Q_OV_wm', col_flow='Belimo-2highest FlowRate', col_tempout='Belimo-2highest Temp2 internal', col_tempin='Belimo-2highest Temp1 external')
+        df_1min = calculate_heat_flow(df_1min, col_wm_flow='Q_WP_wm', col_flow='Belimo-highest FlowRate', col_tempout='Belimo-highest Temp2 internal', col_tempin='Belimo-highest Temp1 external')
 
         df_1hr = convert_to_1_hour_data(df_1min)
 
@@ -1202,8 +1252,21 @@ if __name__ == "__main__":
         # Construct start and end time for knmi data
         # Record whether we use knmi data by comparing number of NaN values before and after filling
         # Sum of NaN values before filling in weather data
-        number_of_nan_values_before = df_1hr['Weather Temp Air'].isna().sum() + df_1hr['Weather Abs Air Pressure'].isna().sum() + df_1hr['Weather Rel Humidity'].isna().sum()
-        knmi_data_used = False
+        if 'Weather Temp Air' not in df_1hr.columns or 'Weather Abs Air Pressure' not in df_1hr.columns or 'Weather Rel Humidity' not in df_1hr.columns:
+            print("Weather data columns are missing in the 1 hour data and are filled with knmi data.")
+            knmi_data_used = True
+            missing_weather_columns = True
+            # Add missing columns with NaN values
+            if 'Weather Temp Air' not in df_1hr.columns:
+                df_1hr['Weather Temp Air'] = np.nan
+            if 'Weather Abs Air Pressure' not in df_1hr.columns:
+                df_1hr['Weather Abs Air Pressure'] = np.nan
+            if 'Weather Rel Humidity' not in df_1hr.columns:
+                df_1hr['Weather Rel Humidity'] = np.nan
+        else:
+            missing_weather_columns = False
+            number_of_nan_values_before = df_1hr['Weather Temp Air'].isna().sum() + df_1hr['Weather Abs Air Pressure'].isna().sum() + df_1hr['Weather Rel Humidity'].isna().sum()
+            knmi_data_used = False
         start_time = (df_1hr.index[0] - timedelta(days=1)).strftime('%Y%m%d%H')
         end_time = (df_1hr.index[-1] + timedelta(days=1)).strftime('%Y%m%d%H')
         df_knmi = get_hour_data_dataframe(stations=[knmi_station], start=start_time, end=end_time, variables=['T', 'P', 'U'])
@@ -1229,14 +1292,15 @@ if __name__ == "__main__":
                 df_1min.loc[df_1min.index.floor('h') == hour, 'Weather Rel Humidity'] = rel_hum_filled.at[hour]
 
         # Calculate the number of NaN values after filling
-        number_of_nan_values_after = df_1hr['Weather Temp Air'].isna().sum() + df_1hr['Weather Abs Air Pressure'].isna().sum() + df_1hr['Weather Rel Humidity'].isna().sum()
-        filled_knmi_data = number_of_nan_values_before - number_of_nan_values_after
+        if missing_weather_columns == False:
+            number_of_nan_values_after = df_1hr['Weather Temp Air'].isna().sum() + df_1hr['Weather Abs Air Pressure'].isna().sum() + df_1hr['Weather Rel Humidity'].isna().sum()
+            filled_knmi_data = number_of_nan_values_before - number_of_nan_values_after
 
-        # Print the results
-        if filled_knmi_data > 0 or hours_knmi_used > 0:
-            print(f"Filled {filled_knmi_data} NaN values with KNMI data.")
-            print(f"Replaced weather data for {hours_knmi_used} hours with KNMI data.")
-            knmi_data_used = True
+            # Print the results
+            if filled_knmi_data > 0 or hours_knmi_used > 0:
+                print(f"Filled {filled_knmi_data} NaN values with KNMI data.")
+                print(f"Replaced weather data for {hours_knmi_used} hours with KNMI data.")
+                knmi_data_used = True
 
         df_1min = add_cop_values(df_1min)
         df_1hr = convert_to_1_hour_data(df_1min) # Convert to 1 hour data again, because we have added the COP values
