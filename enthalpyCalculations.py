@@ -84,6 +84,8 @@ def perform_calculations(df_Ggas, df, interp_func, temperatures, pressures):
 
     df[('RV1', 'm_gas_str1', 'kg/h')] = df[('MV6','V_gas_str1', 'm3(n)/h')] *  0.8334
     df[('RV2', 'm_gas_str2', 'kg/h')] = df[('MV9', 'V_gas_str2', 'm3(n)/h')] *  0.8334
+    if ('MV12', 'V_gas_str3', 'm3(n)/h') in df.columns:
+        df[('RV2a', 'm_gas_str3', 'kg/h')] = df[('MV12', 'V_gas_str3', 'm3(n)/h')] *  0.8334
     df[('RV3', 'm_gas_tot', 'kg/h')] = df[('RV1', 'm_gas_str1', 'kg/h')].add(df[('RV2', 'm_gas_str2', 'kg/h')])
     df[('RV4', 'h_gas_in', 'kJ/kg')] = df.apply(
         lambda row: calculate_and_compare(row, ('MV5', 'T_gas_in', '\u00b0C'), ('MV4', 'p_gas_in', 'bara')),
@@ -97,10 +99,19 @@ def perform_calculations(df_Ggas, df, interp_func, temperatures, pressures):
         lambda row: calculate_and_compare(row, ('MV11', 'T_uit_str2', '\u00b0C'), ('MV10', 'p_uit_str2', 'bara')),
         axis=1
     )
+    if ('MV14', 'T_uit_str3', '\u00b0C') in df.columns and ('MV13', 'p_uit_str3', 'bara') in df.columns:
+        df[('RV6a', 'h_uit_str3', 'kJ/kg')] = df.apply(
+            lambda row: calculate_and_compare(row, ('MV14', 'T_uit_str3', '\u00b0C'), ('MV13', 'p_uit_str3', 'bara')),
+            axis=1
+        )
     df[('RV7', 'dh_str1', 'kJ/kg')] = (df[('RV5', 'h_uit_str1', 'kJ/kg')].sub(df[('RV4', 'h_gas_in', 'kJ/kg')])).clip(lower=0)
     df[('RV8', 'dh_str2', 'kJ/kg')] = (df[('RV6', 'h_uit_str2', 'kJ/kg')].sub(df[('RV4', 'h_gas_in', 'kJ/kg')])).clip(lower=0)
+    if ('RV6a', 'h_uit_str3', 'kJ/kg') in df.columns and ('RV4', 'h_gas_in', 'kJ/kg') in df.columns:
+        df[('RV8a', 'dh_str3', 'kJ/kg')] = (df[('RV6a', 'h_uit_str3', 'kJ/kg')].sub(df[('RV4', 'h_gas_in', 'kJ/kg')])).clip(lower=0)
     df[('RV9', 'Q_str1', 'kJ/s')] =  df[('RV1', 'm_gas_str1', 'kg/h')].mul(df[('RV7', 'dh_str1', 'kJ/kg')]) / 3600
     df[('RV10', 'Q_str2', 'kJ/s')] = df[('RV2', 'm_gas_str2', 'kg/h')].mul(df[('RV8', 'dh_str2', 'kJ/kg')]) / 3600
+    if ('RV2a', 'm_gas_str3', 'kg/h') in df.columns and ('RV8a', 'dh_str3', 'kJ/kg') in df.columns:
+        df[('RV10a', 'Q_str3', 'kJ/s')] = df[('RV2a', 'm_gas_str3', 'kg/h')].mul(df[('RV8a', 'dh_str3', 'kJ/kg')]) / 3600
     df[('RV11', 'Q_brgas', 'kJ/s')] = ((df[('MV15', 'V_gas_br', 'l/h')] / 1000) * 35.17) / 3.6
 
 
@@ -127,8 +138,15 @@ def perform_calculations(df_Ggas, df, interp_func, temperatures, pressures):
     df[('RV19', 'COP_WP', '-')] = rend_WP
     df[('RV20', 'WZ_rend', '%-BW')] = Q_afgeg.div(Q_opgen.where(Q_opgen != 0, np.nan)) * 100
 
-    # Q_straten = df[('RV9', 'Q_str1', 'kJ/s')].add(df[('RV10', 'Q_str2', 'kJ/s')]).add(df[('...', 'Q_koeler', 'kJ/s')])
-    Q_straten = df[('RV9', 'Q_str1', 'kJ/s')].add(df[('RV10', 'Q_str2', 'kJ/s')])
+    cols = [
+        ('RV9','Q_str1','kJ/s'),
+        ('RV10','Q_str2','kJ/s'),
+        ('RV10a','Q_str3','kJ/s')
+    ]
+    # Keep only columns that exist in the DataFrame
+    existing_cols = [c for c in cols if c in df.columns]
+    # Sum per row, skipping NaNs
+    Q_straten = df[existing_cols].sum(axis=1, skipna=True)
     df[('RV21', 'totrend', '%-BW')] = Q_straten.div(Q_opgen.where(Q_opgen != 0, np.nan)) * 100
     return df, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten
 

@@ -50,10 +50,10 @@ if len(sys.argv) > 2:
 else:
     # Else use the default values, that can be set here manually:
     # sMeetsetFolder = 'StresstestDeventer_08-12jul'
-    #sMeetsetFolder = 'Meetset3-Wijhe'
-    sMeetsetFolder = 'Meetset2-Nunspeet'
+    sMeetsetFolder = 'Meetset3-Wijhe'
+    #sMeetsetFolder = 'Meetset2-Nunspeet'
     #sMeetsetFolder = 'Meetset1-Deventer'
-    location = 'Nunspeet' # Used for Automatic excel calculations within Word documents
+    location = 'Wijhe' # Used for Automatic excel calculations within Word documents
 
 # Set the knmi station closest to the location
 if location == 'Deventer':
@@ -61,7 +61,7 @@ if location == 'Deventer':
 elif location == 'Nunspeet':
     knmi_station = 260 # Station de Bilt, 45 km from Nunspeet
 elif location == 'Wijhe':
-    knmi_station = 278 # Station Heino, 10 km from Wijhe 
+    knmi_station = 290 # Station Twente, 40 km from Wijhe (Station Heino, 10 km from Wijhe has no valid data so we use Twenthe) 
 else:
     raise ValueError(f"Unknown location '{location}'. Please set knmi_station accordingly.")
 
@@ -81,7 +81,7 @@ else:
     # sDateStart = '2022-11-24'
     # sDateEnd = '2024-11-25'
 
-    sDateStart = '2025-06-22'
+    sDateStart = '2025-05-15'
     sDateEnd = '2026-05-19'
 
 # Some global constants
