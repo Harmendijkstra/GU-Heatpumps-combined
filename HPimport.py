@@ -81,8 +81,8 @@ else:
     # sDateStart = '2022-11-24'
     # sDateEnd = '2024-11-25'
 
-    sDateStart = '2025-05-15'
-    sDateEnd = '2026-05-19'
+    sDateStart = '2025-09-28'
+    sDateEnd = '2026-06-01'
 
 # Some global constants
 minimum_WP_power = 500 # Minimum power in We to consider the WP to be running
@@ -1176,8 +1176,8 @@ if __name__ == "__main__":
         # Check on outlier values:
         # TgasIn: Outliers for temperature and PgasIn: outliers for incoming pressure
         # UPDATE, convert Soil temperature corrected for TgasIn
-        if location == 'Deventer':
-            df['TgasIn'] = df['Soil temperature corrected'] 
+        
+        df['TgasIn'] = df['Soil temperature corrected'] 
         rowsMask = df[~df['TgasIn'].between(TgasIn_min, TgasIn_max)].index
         df.loc[rowsMask, 'TgasIn'] = np.nan
         rowsMask = df[~df['PgasIn'].between(PgasIn_min, PgasIn_max)].index
