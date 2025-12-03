@@ -132,7 +132,11 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
                         print("Replaced timezone-naive timestamps in 'Adjusted Timestamp' with NaN.")
         else:
             raise ValueError(f"Expected precisely one file containing 'Daily' in '{created_excel_output_folder}', but found {len(file_sum_day)}.")
-        
+
+        # Use generic output Excel filename, so correct this for Nunspeet-3Streets:
+        if sMeetsetFolder == 'Meetset2-Nunspeet':
+                    excel_filename = 'Uitwerk light uurbasis zonder koeler RM-new.xlsm' #Note we have in Nunspeet 3 streets such that there is a slightly different Excel file
+
         attempt = 0
         finished = False
         while (attempt <= retry_count) and not finished:
@@ -149,7 +153,7 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
                 else:
                     used_trusted_documents_dir = 'TemporaryStoredFiles'
                     filename_data = os.path.join(cwd, 'Automatic excel calculations', 'TemporaryStoredFiles', excel_filename)
-
+                
                 # Delete the file if it already exists
                 if os.path.exists(filename_data):
                     os.remove(filename_data)
