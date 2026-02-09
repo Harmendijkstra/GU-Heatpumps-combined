@@ -59,7 +59,7 @@ def interpolate_h_gas_in(row, temp_col, pres_col, interp_func, temperatures, pre
     
     return interp_func(temperature, pressure)[0]
 
-def perform_calculations(df_Ggas, df, interp_func, temperatures, pressures):
+def perform_calculations(df_Ggas, df, interp_func, temperatures, pressures, folder_dir):
     def calculate_and_compare(row, temp_col, pres_col):
         temperature = row[temp_col]
         pressure = row[pres_col]
@@ -119,6 +119,8 @@ def perform_calculations(df_Ggas, df, interp_func, temperatures, pressures):
     df[('RV12', 'dT_ketelw', 'K')] = dT_ketelw
     df[('RV13', 'Q_ket1', 'kJ/s')] = (df[('MV20', 'Vw_ex_OV', 'l/h')] * 4.19 * (dT_ketelw)) / 3600 #Note that this is changed, using the OV instead of the ketel
     dT_WP = df[('MV35', 'T_WP_uit', '\u00b0C')].sub(df[('MV34', 'T_WP_in', '\u00b0C')])
+    if 'Wijhe' in folder_dir:
+        dT_WP = -1 * dT_WP # For Wijhe, the T_WP_in/out values are switched
     df[('RV14', 'dT_WP', 'K')] = dT_WP
     df[('RV15', 'Q_WP', 'kJ/s')] = (df[('MV21', 'Vw_WP', 'l/h')] * 4.19 * (dT_WP)) / 3600
     dT_OV = df[('MV28', 'Tw_OV_uit', '\u00b0C')].sub(df[('MV29', 'Tw_OV_in', '\u00b0C')])
@@ -190,8 +192,8 @@ def process_all_weeks(df_full, df_withRV, df, prefix, folder_dir):
             print(f'Skipping week {no} of year {year}, not complete week')
         else:
             print(f'Saving week no {no} of year {year}')
-            df_1hr_newheaders_withRV_week = df_withRV[mask]
-            df_1hr_newheaders_week = df[mask]
+            df_1hr_newheaders_withRV_week = df_withRV[mask].copy()
+            df_1hr_newheaders_week = df[mask].copy()
 
             # Get the first date in the DataFrame
             first_date = df_1hr_newheaders_week.index[0]
@@ -270,7 +272,7 @@ def process_minute_data(df, folder_dir, prefix=''):
     
     df_withRV = df.copy()
     
-    df_withRV, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten = perform_calculations(df_Ggas, df_withRV, interp_func, temperatures, pressures)
+    df_withRV, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten = perform_calculations(df_Ggas, df_withRV, interp_func, temperatures, pressures, folder_dir)
     
     df_full = add_additional_columns(df_withRV, dT_ketelw, dT_WP, dT_koeler, Pe_WP_kW, Q_afgeg, Q_opgen, Q_straten)
     
@@ -344,10 +346,13 @@ def create_hourly_df_with_RV(df_1min_full, df_1hr_newheaders):
     ) * 100
 
     # Compute Q_straten
+#DONE Lennart: for Nunspeet there are 3 gas streams, need to include the third one here as well
     Q_straten = (
         df_hourly_full[('RV9', 'Q_str1', 'kJ/s')]
         .add(df_hourly_full[('RV10', 'Q_str2', 'kJ/s')], fill_value=0)
     )
+    if ('RV10a', 'Q_str3', 'kJ/s') in df_hourly_full.columns:
+        Q_straten = Q_straten.add(df_hourly_full[('RV10a', 'Q_str3', 'kJ/s')], fill_value=0)
 
     # Compute totrend [%]
     df_hourly_full[('RV21', 'totrend', '%-BW')] = Q_straten.div(

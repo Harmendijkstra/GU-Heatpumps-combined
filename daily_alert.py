@@ -18,7 +18,7 @@ from HPimport import (
     interpolate_nans,
     sortColumns,
     remove_outliers,
-    calc_weithed_mean_flow,
+    calculate_heat_flow,
     add_cop_values,
     convert_to_1_hour_data,
     create_output_dataframe
@@ -55,8 +55,10 @@ if len(sys.argv) > 2:
     location = sys.argv[2]
 else:
     # Else use the default values, that can be set here manually:
-    sMeetsetFolder = 'Meetset1-Deventer'
-    location = 'Deventer' # Used for Automatic excel calculations within Word documents
+    # sMeetsetFolder = 'Meetset1-Deventer'
+    sMeetsetFolder = 'Meetset2-Nunspeet'
+    # sMeetsetFolder = 'Meetset3-Wijhe'
+    location = sMeetsetFolder.split('-')[-1] # Used for Automatic excel calculations within Word documents
 
 #Note that we need to go back an extra day because knmi data is not available yet for the previous day and even one more since we need one or two hours of the day before due to hour settings (summertime/wintertime)
 if bRunTwoDaysBefore:
@@ -156,10 +158,11 @@ df_minmax = pd.read_excel(minmax_filepath)
 df_1min, outliers_count, max_consecutive_count = remove_outliers(df_1min, df_minmax, lstHeaderMapping=hHP.makeAllHeaderMappings())
 
 # Add some columns with weighted mean flow rates
-df_1min = calc_weithed_mean_flow(df_1min, col_wm_flow='Q_ket1_wm', col_flow='Belimo01 FlowRate', col_tempout='Belimo01 Temp2 internal', col_tempin='Belimo01 Temp1 external')
-df_1min = calc_weithed_mean_flow(df_1min, col_wm_flow='Q_OV_wm', col_flow='Belimo02 FlowRate', col_tempout='Belimo02 Temp2 internal', col_tempin='Belimo02 Temp1 external')
-df_1min = calc_weithed_mean_flow(df_1min, col_wm_flow='Q_WP_wm', col_flow='Belimo03 FlowRate', col_tempout='Belimo03 Temp2 internal', col_tempin='Belimo03 Temp1 external')
-df_1min = calc_weithed_mean_flow(df_1min, col_wm_flow='Q_klep_wm', col_flow='BelimoValve FlowRate', col_tempout='BelimoValve Temp2 internal', col_tempin='BelimoValve Temp1 external')
+#TODO Q_OV is Belimo02 only when 2 ketels are present, so not at Nunspeet (highest, 2highest, etc). Same for Belimo03.
+df_1min = calculate_heat_flow(df_1min, col_wm_flow='Q_ket1_wm', col_flow='Belimo01 FlowRate', col_tempout='Belimo01 Temp2 internal', col_tempin='Belimo01 Temp1 external')
+df_1min = calculate_heat_flow(df_1min, col_wm_flow='Q_OV_wm', col_flow='Belimo02 FlowRate', col_tempout='Belimo02 Temp2 internal', col_tempin='Belimo02 Temp1 external')
+df_1min = calculate_heat_flow(df_1min, col_wm_flow='Q_WP_wm', col_flow='Belimo03 FlowRate', col_tempout='Belimo03 Temp2 internal', col_tempin='Belimo03 Temp1 external')
+# df_1min = calc_weithed_mean_flow(df_1min, col_wm_flow='Q_klep_wm', col_flow='BelimoValve FlowRate', col_tempout='BelimoValve Temp2 internal', col_tempin='BelimoValve Temp1 external')
 
 df_1min = add_cop_values(df_1min)
 df_1hr = convert_to_1_hour_data(df_1min)
@@ -230,3 +233,5 @@ if body:
     send_email(email_subject, email_body, "robert.mellema@dnv.com", sMeetsetFolder, two_days_previous) 
     send_email(email_subject, email_body, "lennart.vanluijk@dnv.com", sMeetsetFolder, two_days_previous) 
     send_teams_message(body, sMeetsetFolder, two_days_previous)
+else:
+    print(f"\nNo issues found at {location}, no email sent.")

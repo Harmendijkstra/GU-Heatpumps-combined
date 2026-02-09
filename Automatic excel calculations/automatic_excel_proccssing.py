@@ -115,6 +115,8 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
             # Load the file into a DataFrame
             file_path = file_sum_week[0]
             df_weekly_sum = pd.read_excel(file_path)
+            drop_cols = [col for col in df_weekly_sum.columns if col.startswith('Q_fabr')]
+            df_weekly_sum.drop(columns=drop_cols, inplace=True, errors='ignore')
 
         else:
             raise ValueError(f"Expected precisely one file containing 'Weekly' in '{created_excel_output_folder}', but found {len(file_sum_week)}.")
@@ -130,6 +132,8 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
                     if df_daily_sum['Adjusted Timestamp'].dt.tz is None:
                         df_daily_sum['Adjusted Timestamp'] = np.nan
                         print("Replaced timezone-naive timestamps in 'Adjusted Timestamp' with NaN.")
+            drop_cols = [col for col in df_daily_sum.columns if col.startswith('Q_fabr')]
+            df_daily_sum.drop(columns=drop_cols, inplace=True, errors='ignore')
         else:
             raise ValueError(f"Expected precisely one file containing 'Daily' in '{created_excel_output_folder}', but found {len(file_sum_day)}.")
 
@@ -195,7 +199,10 @@ def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_u
 
                 # Copy the data from the worksheet, including the formatting
                 # ws.Range("A1").CurrentRegion.CopyPicture()
-                ws.Range("B1:O75").CopyPicture()
+                # ws.Range("B1:O75").CopyPicture()
+                # Find the last used row in the worksheet
+                last_row = ws.UsedRange.Rows.Count
+                ws.Range(f"B1:O{last_row}").CopyPicture()
 
                 # Create a new Word application
                 wApp = win32.Dispatch('Word.Application')
