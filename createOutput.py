@@ -42,11 +42,11 @@ def get_decimal_places_mapping(input_data, input_type='dict', is_hourly=False):
     decimal_places = {}
 
     def process_item(mv_key, dimension, key):
-        if dimension in ['m3/h', 'kWh', 'bara', 'm3(n)/h', 'kJ/kg', 'kg/h', 'kJ/s', 'kJ/s']:
+        if dimension in ['m3/h', 'kWh', 'bara', 'm3(n)/h', 'kJ/kg', 'kg/h', 'kJ/s', 'kJ/s', 'kW']:
             decimal_places[mv_key] = 3
-        elif dimension in ['\u00b0C', 'hPa', '-']:
+        elif dimension in ['\u00b0C', 'hPa', '-', 'K']:
             decimal_places[mv_key] = 2
-        elif dimension in ['%', 'kW', 'l/h', 'W', '%-BW', 'K']:
+        elif dimension in ['%', 'l/h', 'W', '%-BW']:
             decimal_places[mv_key] = 0
         elif dimension == '-':
             # Skip adding to decimal_places mapping

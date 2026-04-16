@@ -70,6 +70,8 @@ def wait_for_clipboard(timeout=10):
 def create_word_documents(sMeetsetFolder, location, weeks_with_year, knmi_data_used, pWord, retry_count=1):
     # filepath_datadir = cwd + '/ExcelCalculations/Regulier/Uurwaarden/1hour - RV - weekno - 36Energy Balance - 02-09-2024 - 08-09-2024.xlsx'
     excel_filename = 'Uitwerk light uurbasis zonder koeler RM-new.xlsm'
+    # excel_filename = 'Uitwerk light uurbasis zonder koeler RM-Nunspeet.xlsm'
+#TODO Test if this works above
     if sMeetsetFolder == 'Meetset2-Nunspeet':
         excel_filename = 'Uitwerk light uurbasis zonder koeler RM-Nunspeet.xlsm' #Note we have in Nunspeet 3 streets such that there is a slightly different Excel file
     excel_filepath = os.path.abspath(os.path.join(cwd, 'Automatic excel calculations', 'Input', excel_filename))

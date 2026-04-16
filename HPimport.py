@@ -35,7 +35,7 @@ bWriteExcel = True
 bDebugStopExecutionHere = False # This is used before to run seperate file for the stress test of the script in between
 #TODO Lennart: set everything back to automatic after testing
 bReadPickles = False # This is used to read the pickles from the previous run, good for debugging, but not for normal use. It will than use var_names to read the pickles
-bRunPreviousWeek = False # This variable needs to be True if the script is runned automatically, to get the previous week data 
+bRunPreviousWeek = True # This variable needs to be True if the script is runned automatically, to get the previous week data 
 bReportWord = True # This is used for reporting. For automated reporting, set to True.
 KNMI_SOIL_CORRECTION = 0.65
 
@@ -93,8 +93,8 @@ elif bManualReportDates:
     # sDateStart = '2025-05-18'
     # sDateEnd = '2025-08-03'
 
-    sDateStart = '2026-01-25'
-    sDateEnd = '2026-02-01'
+    sDateStart = '2025-12-26'
+    sDateEnd = '2026-04-01'
 
 
 # Some global constants
@@ -1207,7 +1207,8 @@ if __name__ == "__main__":
         # TgasIn: Outliers for temperature and PgasIn: outliers for incoming pressure
         # UPDATE, convert Soil temperature corrected for TgasIn
         
-        df['TgasIn'] = df['Soil temperature corrected'] 
+        if location != 'Nunspeet': # For Nunspeet, TgasIn is not based on soil temperature, so do not apply the same limits as for the other locations
+            df['TgasIn'] = df['Soil temperature corrected'] 
         rowsMask = df[~df['TgasIn'].between(TgasIn_min, TgasIn_max)].index
         df.loc[rowsMask, 'TgasIn'] = np.nan
         rowsMask = df[~df['PgasIn'].between(PgasIn_min, PgasIn_max)].index
